@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Grok Register Console</title>
-  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/app.css?v={{ static_versions.app_css }}">
 </head>
 <body>
   <div id="app" class="shell">
@@ -49,8 +49,18 @@
             <input name="proxy" placeholder="例如 http://host:port">
           </label>
           <label>
+            <span>邮箱类型</span>
+            <small>自定义域名建议显式选择，避免仅靠接口域名自动识别。</small>
+            <select name="temp_mail_provider">
+              <option value="">自动识别</option>
+              <option value="cloudflaremail">CloudflareMail</option>
+              <option value="duckmail">DuckMail</option>
+              <option value="generic">Generic Temp Mail</option>
+            </select>
+          </label>
+          <label>
             <span>邮箱 API Base</span>
-            <small>临时邮箱服务接口地址，既支持自定义 Temp Mail，也支持 DuckMail。</small>
+            <small>临时邮箱服务接口地址，支持自定义 Temp Mail、DuckMail 和 CloudflareMail。</small>
             <input name="temp_mail_api_base" placeholder="https://api.duckmail.sbs">
           </label>
           <label>
@@ -138,8 +148,18 @@
               <input name="proxy" placeholder="留空则用系统默认">
             </label>
             <label>
+              <span>邮箱类型覆盖</span>
+              <small>当前任务临时切换邮箱实现时再选；留空则用系统默认值。</small>
+              <select name="temp_mail_provider">
+                <option value="">留空则用系统默认</option>
+                <option value="cloudflaremail">CloudflareMail</option>
+                <option value="duckmail">DuckMail</option>
+                <option value="generic">Generic Temp Mail</option>
+              </select>
+            </label>
+            <label>
               <span>邮箱 API Base 覆盖</span>
-              <small>当前任务临时改用别的邮箱接口时再填，也支持 DuckMail。</small>
+              <small>当前任务临时改用别的邮箱接口时再填，也支持 DuckMail 和 CloudflareMail。</small>
               <input name="temp_mail_api_base" placeholder="留空则用系统默认">
             </label>
             <label>
@@ -225,6 +245,6 @@
   <script>
     window.__DEFAULTS__ = {{ defaults|safe }};
   </script>
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v={{ static_versions.app_js }}"></script>
 </body>
 </html>

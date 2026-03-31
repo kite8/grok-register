@@ -87,16 +87,35 @@ def get_oai_code(dev_token: str, email: str, timeout: int = 30) -> Optional[str]
 
 
 def _detect_mail_provider(api_base: str) -> str:
-    if TEMP_MAIL_PROVIDER in {"duckmail", "temp-mail", "temp_mail", "generic"}:
-        return "duckmail" if TEMP_MAIL_PROVIDER == "duckmail" else "generic"
+    if TEMP_MAIL_PROVIDER in {
+        "duckmail",
+        "cloudflaremail",
+        "cloudflare-mail",
+        "cloudflare_mail",
+        "temp-mail",
+        "temp_mail",
+        "generic",
+    }:
+        if TEMP_MAIL_PROVIDER == "duckmail":
+            return "duckmail"
+        if TEMP_MAIL_PROVIDER in {"cloudflaremail", "cloudflare-mail", "cloudflare_mail"}:
+            return "cloudflaremail"
+        return "generic"
     hostname = (urlparse(api_base).hostname or "").lower()
     if "duckmail" in hostname:
         return "duckmail"
+    if "cloudflare" in hostname:
+        return "cloudflaremail"
     return "generic"
 
 
 def _provider_label() -> str:
-    return "DuckMail" if _detect_mail_provider(TEMP_MAIL_API_BASE) == "duckmail" else "Temp Mail"
+    provider = _detect_mail_provider(TEMP_MAIL_API_BASE)
+    if provider == "duckmail":
+        return "DuckMail"
+    if provider == "cloudflaremail":
+        return "CloudflareMail"
+    return "Temp Mail"
 
 def _create_session():
     """创建请求会话（优先 curl_cffi）。"""
@@ -157,6 +176,40 @@ def _build_duckmail_headers(token: str = "") -> Dict[str, str]:
     if token:
         headers["Authorization"] = f"Bearer {token}"
     return headers
+
+
+def _build_cloudflaremail_headers(token: str) -> Dict[str, str]:
+    if not token:
+        raise Exception("CloudflareMail 缺少管理员 token")
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _encode_cloudflaremail_token(root_token: str, email: str) -> str:
+    return json.dumps(
+        {
+            "provider": "cloudflaremail",
+            "root_token": root_token,
+            "mailbox": email,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+
+
+def _decode_cloudflaremail_token(mail_token: str) -> Tuple[str, str]:
+    try:
+        payload = json.loads(mail_token)
+    except Exception as e:
+        raise Exception(f"CloudflareMail mail_token 解析失败: {e}")
+
+    if not isinstance(payload, dict):
+        raise Exception("CloudflareMail mail_token 格式错误")
+
+    root_token = str(payload.get("root_token") or "").strip()
+    mailbox = str(payload.get("mailbox") or "").strip()
+    if not root_token or not mailbox:
+        raise Exception(f"CloudflareMail mail_token 缺少 root_token/mailbox: {payload}")
+    return root_token, mailbox
 
 
 def _extract_duckmail_token(payload: Dict[str, Any]) -> str:
@@ -278,6 +331,79 @@ def _create_duckmail_email() -> Tuple[str, str, str]:
     raise Exception(f"创建 DuckMail 邮箱失败，重试后仍冲突: {last_error}")
 
 
+def _resolve_cloudflaremail_domain(session, use_cffi, api_base: str, headers: Dict[str, str]) -> Tuple[str, int]:
+    res = _do_request(
+        session,
+        use_cffi,
+        "get",
+        f"{api_base}/api/domains",
+        headers=headers,
+        timeout=20,
+    )
+    if res.status_code != 200:
+        raise Exception(f"获取 CloudflareMail 域名失败: {res.status_code} - {res.text[:200]}")
+
+    data = res.json()
+    if not isinstance(data, list) or not data:
+        raise Exception("CloudflareMail 域名接口返回为空或格式异常")
+
+    domains = [str(item).strip() for item in data if str(item).strip()]
+    if not domains:
+        raise Exception("CloudflareMail 域名列表为空")
+
+    if TEMP_MAIL_DOMAIN:
+        for index, domain in enumerate(domains):
+            if domain == TEMP_MAIL_DOMAIN:
+                return domain, index
+        raise Exception(f"CloudflareMail 域名列表中不存在 temp_mail_domain: {TEMP_MAIL_DOMAIN}")
+
+    return domains[0], 0
+
+
+def _create_cloudflaremail_email() -> Tuple[str, str, str]:
+    if not TEMP_MAIL_ADMIN_PASSWORD:
+        raise Exception("temp_mail_admin_password 未设置，无法创建 CloudflareMail 邮箱")
+
+    api_base = TEMP_MAIL_API_BASE.rstrip("/")
+    session, use_cffi = _create_session()
+    headers = _build_headers(_build_cloudflaremail_headers(TEMP_MAIL_ADMIN_PASSWORD))
+    _domain, domain_index = _resolve_cloudflaremail_domain(session, use_cffi, api_base, headers)
+    last_error = ""
+
+    for _ in range(5):
+        email_local = _generate_local_part(random.randint(8, 12))
+        res = _do_request(
+            session,
+            use_cffi,
+            "post",
+            f"{api_base}/api/create",
+            json={
+                "local": email_local,
+                "domainIndex": domain_index,
+            },
+            headers=headers,
+            timeout=20,
+        )
+        if res.status_code in {200, 201}:
+            data = res.json()
+            if not isinstance(data, dict):
+                raise Exception("CloudflareMail 创建邮箱返回格式异常")
+            email = str(data.get("email") or "").strip()
+            if not email:
+                raise Exception(f"CloudflareMail 创建邮箱接口未返回 email: {data}")
+
+            print(f"[*] CloudflareMail 临时邮箱创建成功: {email}")
+            return email, "", _encode_cloudflaremail_token(TEMP_MAIL_ADMIN_PASSWORD, email)
+
+        if res.status_code in {409, 422}:
+            last_error = f"{res.status_code} - {res.text[:200]}"
+            continue
+
+        raise Exception(f"创建 CloudflareMail 邮箱失败: {res.status_code} - {res.text[:200]}")
+
+    raise Exception(f"创建 CloudflareMail 邮箱失败，重试后仍冲突: {last_error}")
+
+
 def create_temp_email() -> Tuple[str, str, str]:
     """创建临时邮箱地址，返回 (email, password, mail_token)。"""
     if not TEMP_MAIL_API_BASE:
@@ -289,6 +415,11 @@ def create_temp_email() -> Tuple[str, str, str]:
             return _create_duckmail_email()
         except Exception as e:
             raise Exception(f"DuckMail 临时邮箱创建失败: {e}")
+    if provider == "cloudflaremail":
+        try:
+            return _create_cloudflaremail_email()
+        except Exception as e:
+            raise Exception(f"CloudflareMail 临时邮箱创建失败: {e}")
 
     if not TEMP_MAIL_ADMIN_PASSWORD:
         raise Exception("temp_mail_admin_password 未设置，无法创建临时邮箱")
@@ -351,11 +482,44 @@ def _fetch_duckmail_emails(mail_token: str) -> List[Dict[str, Any]]:
     return data.get("hydra:member") or data.get("data") or data.get("results") or data.get("messages") or []
 
 
+def _fetch_cloudflaremail_emails(mail_token: str) -> List[Dict[str, Any]]:
+    api_base = TEMP_MAIL_API_BASE.rstrip("/")
+    root_token, mailbox = _decode_cloudflaremail_token(mail_token)
+    headers = _build_headers(_build_cloudflaremail_headers(root_token))
+    session, use_cffi = _create_session()
+    res = _do_request(
+        session,
+        use_cffi,
+        "get",
+        f"{api_base}/api/emails",
+        params={"mailbox": mailbox, "limit": 20},
+        headers=headers,
+        timeout=20,
+    )
+    if res.status_code != 200:
+        return []
+
+    data = res.json()
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    if isinstance(data, dict):
+        messages = data.get("results") or data.get("data") or data.get("emails") or []
+        if isinstance(messages, list):
+            return [item for item in messages if isinstance(item, dict)]
+    return []
+
+
 def fetch_emails(mail_token: str) -> List[Dict[str, Any]]:
     """获取邮件列表。"""
-    if _detect_mail_provider(TEMP_MAIL_API_BASE) == "duckmail":
+    provider = _detect_mail_provider(TEMP_MAIL_API_BASE)
+    if provider == "duckmail":
         try:
             return _fetch_duckmail_emails(mail_token)
+        except Exception:
+            return []
+    if provider == "cloudflaremail":
+        try:
+            return _fetch_cloudflaremail_emails(mail_token)
         except Exception:
             return []
 
@@ -427,11 +591,46 @@ def _fetch_duckmail_email_detail(mail_token: str, msg_id: str) -> Optional[Dict[
     return data
 
 
+def _fetch_cloudflaremail_email_detail(mail_token: str, msg_id: str) -> Optional[Dict[str, Any]]:
+    api_base = TEMP_MAIL_API_BASE.rstrip("/")
+    root_token, _mailbox = _decode_cloudflaremail_token(mail_token)
+    normalized_id = _normalize_message_id(msg_id)
+    headers = _build_headers(_build_cloudflaremail_headers(root_token))
+    session, use_cffi = _create_session()
+    res = _do_request(
+        session,
+        use_cffi,
+        "get",
+        f"{api_base}/api/email/{normalized_id}",
+        headers=headers,
+        timeout=20,
+    )
+    if res.status_code != 200:
+        return None
+
+    data = res.json()
+    if not isinstance(data, dict):
+        return None
+
+    normalized = dict(data)
+    if "content" in normalized and "text" not in normalized:
+        normalized["text"] = normalized.get("content")
+    if "html_content" in normalized and "html" not in normalized:
+        normalized["html"] = normalized.get("html_content")
+    return normalized
+
+
 def fetch_email_detail(mail_token: str, msg_id: str) -> Optional[Dict[str, Any]]:
     """获取单封邮件详情。"""
-    if _detect_mail_provider(TEMP_MAIL_API_BASE) == "duckmail":
+    provider = _detect_mail_provider(TEMP_MAIL_API_BASE)
+    if provider == "duckmail":
         try:
             return _fetch_duckmail_email_detail(mail_token, msg_id)
+        except Exception:
+            return None
+    if provider == "cloudflaremail":
+        try:
+            return _fetch_cloudflaremail_email_detail(mail_token, msg_id)
         except Exception:
             return None
 

@@ -36,6 +36,7 @@
     formEl.elements.count.value = defaults.run?.count || 50;
     settingsFormEl.elements.proxy.value = defaults.proxy || "";
     settingsFormEl.elements.browser_proxy.value = defaults.browser_proxy || "";
+    settingsFormEl.elements.temp_mail_provider.value = defaults.temp_mail_provider || "";
     settingsFormEl.elements.temp_mail_api_base.value = defaults.temp_mail_api_base || "";
     settingsFormEl.elements.temp_mail_admin_password.value = defaults.temp_mail_admin_password || "";
     settingsFormEl.elements.temp_mail_domain.value = defaults.temp_mail_domain || "";
@@ -146,6 +147,7 @@
 
     const cfg = task.config || {};
     detailMetaEl.innerHTML = [
+      ["邮箱类型", cfg.temp_mail_provider || "auto"],
       ["邮箱 API Base", cfg.temp_mail_api_base || "-"],
       ["邮箱域名", cfg.temp_mail_domain || "-"],
       ["邮箱管理密码", cfg.temp_mail_admin_password || "-"],
@@ -223,6 +225,7 @@
       count: Number(formEl.elements.count.value),
       proxy: formEl.elements.proxy.value.trim() || null,
       browser_proxy: formEl.elements.browser_proxy.value.trim() || null,
+      temp_mail_provider: formEl.elements.temp_mail_provider.value.trim() || null,
       temp_mail_api_base: formEl.elements.temp_mail_api_base.value.trim() || null,
       temp_mail_admin_password: formEl.elements.temp_mail_admin_password.value.trim() || null,
       temp_mail_domain: formEl.elements.temp_mail_domain.value.trim() || null,
@@ -268,6 +271,7 @@
     const payload = {
       proxy: settingsFormEl.elements.proxy.value.trim(),
       browser_proxy: settingsFormEl.elements.browser_proxy.value.trim(),
+      temp_mail_provider: settingsFormEl.elements.temp_mail_provider.value.trim(),
       temp_mail_api_base: settingsFormEl.elements.temp_mail_api_base.value.trim(),
       temp_mail_admin_password: settingsFormEl.elements.temp_mail_admin_password.value.trim(),
       temp_mail_domain: settingsFormEl.elements.temp_mail_domain.value.trim(),
