@@ -31,7 +31,7 @@ services:
       CF_REFRESH_INTERVAL: ${CF_REFRESH_INTERVAL:-600}
       CF_TIMEOUT: ${CF_TIMEOUT:-60}
     ports:
-      - "${GROK2API_HOST_PORT:-8000}:8000"
+      - "127.0.0.1:${GROK2API_HOST_PORT:-8000}:8000"
     volumes:
       - ./runtime/grok2api/data:/app/data
       - ./runtime/grok2api/logs:/app/logs
@@ -59,7 +59,7 @@ services:
       GROK_REGISTER_DEFAULT_API_TOKEN: ${GROK_REGISTER_DEFAULT_API_TOKEN:-change-this-admin-password}
       GROK_REGISTER_DEFAULT_API_APPEND: ${GROK_REGISTER_DEFAULT_API_APPEND:-true}
     ports:
-      - "${GROK_STACK_CONSOLE_PORT:-18600}:18600"
+      - "127.0.0.1:${GROK_STACK_CONSOLE_PORT:-18600}:18600"
     volumes:
       - .:/workspace
     restart: unless-stopped
