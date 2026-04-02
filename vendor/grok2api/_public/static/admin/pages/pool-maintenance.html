@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grok2API - Pool Maintenance</title>
+  <link rel="icon" href="/favicon.ico">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/geist@1.0.0/dist/fonts/geist-sans/style.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/geist@1.0.0/dist/fonts/geist-mono/style.css" rel="stylesheet">
+  <link href="/static/common/css/common.css?v=1.6.2" rel="stylesheet">
+  <link href="/static/common/css/toast.css" rel="stylesheet">
+</head>
+
+<body class="min-h-screen flex flex-col" style="background-color: var(--bg);">
+  <div id="toast-container" class="toast-container"></div>
+  <div id="app-header"></div>
+
+  <main class="space-y-6 flex-1 container mx-auto max-w-6xl px-6 py-8 fade-in">
+    <div class="space-y-6">
+      <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 class="text-2xl font-semibold tracking-tight">Pool Maintenance</h2>
+          <p class="text-[var(--accents-4)] mt-1 text-sm">
+            Maintain the token pool from the admin backend: replenish active tokens, prune expired ones, and reuse console defaults.
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <button id="refresh-btn" type="button" class="geist-button-outline" onclick="loadStatusOnly()">Refresh</button>
+          <button id="run-btn" type="button" class="geist-button-outline" onclick="runNow()">Run Now</button>
+          <button id="save-btn" type="button" class="geist-button" onclick="saveSettings()">Save Config</button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <div class="rounded-2xl border border-[var(--border)] bg-white p-5">
+          <div class="text-xs text-[var(--accents-4)]">Scheduler</div>
+          <div id="stat-enabled" class="mt-2 text-2xl font-semibold">-</div>
+          <div id="stat-last-run" class="mt-2 text-xs text-[var(--accents-4)]">Last run: -</div>
+        </div>
+        <div class="rounded-2xl border border-[var(--border)] bg-white p-5">
+          <div class="text-xs text-[var(--accents-4)]">Active Tokens</div>
+          <div id="stat-active" class="mt-2 text-2xl font-semibold">-</div>
+          <div id="stat-total" class="mt-2 text-xs text-[var(--accents-4)]">Total tokens: -</div>
+        </div>
+        <div class="rounded-2xl border border-[var(--border)] bg-white p-5">
+          <div class="text-xs text-[var(--accents-4)]">Removable Tokens</div>
+          <div id="stat-removable" class="mt-2 text-2xl font-semibold">-</div>
+          <div id="stat-removable-detail" class="mt-2 text-xs text-[var(--accents-4)]">Cooling stays disabled by default.</div>
+        </div>
+        <div class="rounded-2xl border border-[var(--border)] bg-white p-5">
+          <div class="text-xs text-[var(--accents-4)]">Managed Tasks</div>
+          <div id="stat-running-tasks" class="mt-2 text-2xl font-semibold">-</div>
+          <div id="stat-console" class="mt-2 text-xs text-[var(--accents-4)]">Console: -</div>
+        </div>
+        <div class="rounded-2xl border border-[var(--border)] bg-white p-5">
+          <div class="text-xs text-[var(--accents-4)]">Last Result</div>
+          <div id="stat-last-result" class="mt-2 text-2xl font-semibold">-</div>
+          <div id="stat-last-error" class="mt-2 text-xs text-[var(--accents-4)] break-all">-</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 gap-6 xl:grid-cols-[1.35fr_1fr]">
+        <section class="rounded-2xl border border-[var(--border)] bg-white p-6 space-y-6">
+          <div>
+            <h3 class="text-lg font-semibold">Maintenance Config</h3>
+            <p class="text-sm text-[var(--accents-4)] mt-1">Blank overrides fall back to the current register-console defaults.</p>
+          </div>
+
+          <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <label class="space-y-2">
+              <span class="text-sm font-medium">Enable Scheduler</span>
+              <input id="enabled" type="checkbox" class="h-4 w-4">
+            </label>
+            <label class="space-y-2">
+              <span class="text-sm font-medium">Console URL</span>
+              <input id="console_url" class="geist-input" placeholder="http://console:18600" data-default-placeholder="http://console:18600">
+            </label>
+            <label class="space-y-2">
+              <span class="text-sm font-medium">Check Interval (sec)</span>
+              <input id="interval_sec" class="geist-input" type="number" min="5">
+            </label>
+            <label class="space-y-2">
+              <span class="text-sm font-medium">Managed Pools</span>
+              <input id="managed_pools" class="geist-input" placeholder="ssoBasic">
+            </label>
+            <label class="space-y-2">
+              <span class="text-sm font-medium">Min Active Tokens</span>
+              <input id="min_active_tokens" class="geist-input" type="number" min="1">
+            </label>
+            <label class="space-y-2">
+              <span class="text-sm font-medium">Register Count Per Task</span>
+              <input id="register_count_per_task" class="geist-input" type="number" min="1">
+            </label>
+            <label class="space-y-2">
+              <span class="text-sm font-medium">Max Running Tasks</span>
+              <input id="max_running_tasks" class="geist-input" type="number" min="1">
+            </label>
+            <label class="space-y-2">
+              <span class="text-sm font-medium">Task Name Prefix</span>
+              <input id="task_name_prefix" class="geist-input" placeholder="pool-maintenance">
+            </label>
+          </div>
+
+          <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <label class="space-y-2">
+              <span class="text-sm font-medium">Delete Cooling Tokens</span>
+              <input id="delete_cooling_tokens" type="checkbox" class="h-4 w-4">
+            </label>
+            <label class="space-y-2">
+              <span class="text-sm font-medium">Delete Expired Tokens</span>
+              <input id="delete_expired_tokens" type="checkbox" class="h-4 w-4">
+            </label>
+          </div>
+
+          <div class="space-y-4">
+            <div>
+              <h4 class="text-sm font-semibold">Register Task Overrides</h4>
+              <p class="text-xs text-[var(--accents-4)] mt-1">Only fill fields that should override the console defaults.</p>
+            </div>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <label class="space-y-2">
+                <span class="text-sm font-medium">Request Proxy</span>
+                <input id="proxy" class="geist-input" placeholder="Leave blank to follow console defaults" data-default-placeholder="Leave blank to follow console defaults">
+              </label>
+              <label class="space-y-2">
+                <span class="text-sm font-medium">Browser Proxy</span>
+                <input id="browser_proxy" class="geist-input" placeholder="Leave blank to follow console defaults" data-default-placeholder="Leave blank to follow console defaults">
+              </label>
+              <label class="space-y-2 md:col-span-2">
+                <span class="text-sm font-medium">Temp Mail API Base</span>
+                <input id="temp_mail_api_base" class="geist-input" placeholder="Leave blank to follow console defaults" data-default-placeholder="Leave blank to follow console defaults">
+              </label>
+              <label class="space-y-2 md:col-span-2">
+                <span class="text-sm font-medium">Temp Mail Admin Password</span>
+                <input id="temp_mail_admin_password" class="geist-input" placeholder="Leave blank to follow console defaults" data-default-placeholder="Leave blank to follow console defaults">
+              </label>
+              <label class="space-y-2">
+                <span class="text-sm font-medium">Temp Mail Domain</span>
+                <input id="temp_mail_domain" class="geist-input" placeholder="Leave blank to follow console defaults" data-default-placeholder="Leave blank to follow console defaults">
+              </label>
+              <label class="space-y-2">
+                <span class="text-sm font-medium">Temp Mail Site Password</span>
+                <input id="temp_mail_site_password" class="geist-input" placeholder="Leave blank to follow console defaults" data-default-placeholder="Leave blank to follow console defaults">
+              </label>
+              <label class="space-y-2 md:col-span-2">
+                <span class="text-sm font-medium">Pushback API Endpoint</span>
+                <input id="api_endpoint" class="geist-input" placeholder="Leave blank to follow console defaults" data-default-placeholder="Leave blank to follow console defaults">
+              </label>
+              <label class="space-y-2 md:col-span-2">
+                <span class="text-sm font-medium">Pushback API Token</span>
+                <input id="api_token" class="geist-input" placeholder="Leave blank to follow console defaults" data-default-placeholder="Leave blank to follow console defaults">
+              </label>
+              <label class="space-y-2">
+                <span class="text-sm font-medium">Append Existing Pool on Pushback</span>
+                <input id="api_append" type="checkbox" class="h-4 w-4">
+              </label>
+              <label class="space-y-2">
+                <span class="text-sm font-medium">Auto Enable NSFW</span>
+                <input id="api_auto_enable_nsfw" type="checkbox" class="h-4 w-4">
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section class="space-y-6">
+          <div class="rounded-2xl border border-[var(--border)] bg-white p-6 space-y-4">
+            <div>
+              <h3 class="text-lg font-semibold">Run Summary</h3>
+              <p class="text-sm text-[var(--accents-4)] mt-1">Shows the latest scheduler result and the current managed token-pool snapshot.</p>
+            </div>
+            <pre id="last-result-box" class="rounded-xl bg-[var(--accents-1)] p-4 text-xs overflow-auto whitespace-pre-wrap min-h-[180px]">Loading...</pre>
+          </div>
+
+          <div class="rounded-2xl border border-[var(--border)] bg-white p-6 space-y-4">
+            <div>
+              <h3 class="text-lg font-semibold">Console Defaults</h3>
+              <p class="text-sm text-[var(--accents-4)] mt-1">Read from the current register console. Blank overrides continue to follow these values.</p>
+            </div>
+            <div id="console-defaults-meta" class="text-xs text-[var(--accents-4)]">Loading...</div>
+            <pre id="console-defaults-box" class="rounded-xl bg-[var(--accents-1)] p-4 text-xs overflow-auto whitespace-pre-wrap min-h-[180px]">Loading...</pre>
+          </div>
+
+          <div class="rounded-2xl border border-[var(--border)] bg-white p-6 space-y-4">
+            <div>
+              <h3 class="text-lg font-semibold">Effective Register Config</h3>
+              <p class="text-sm text-[var(--accents-4)] mt-1">The config actually used when auto-created replenish tasks run.</p>
+            </div>
+            <pre id="effective-config-box" class="rounded-xl bg-[var(--accents-1)] p-4 text-xs overflow-auto whitespace-pre-wrap min-h-[180px]">Loading...</pre>
+          </div>
+
+          <div class="rounded-2xl border border-[var(--border)] bg-white p-6 space-y-4">
+            <div>
+              <h3 class="text-lg font-semibold">Recent Managed Tasks</h3>
+              <p class="text-sm text-[var(--accents-4)] mt-1">Only register tasks created by this maintenance worker are listed here.</p>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="geist-table min-w-full">
+                <thead>
+                  <tr>
+                    <th class="text-left">ID</th>
+                    <th class="text-left">Name</th>
+                    <th>Status</th>
+                    <th>Progress</th>
+                    <th class="text-left">Created At</th>
+                  </tr>
+                </thead>
+                <tbody id="task-table-body">
+                  <tr><td colspan="5" class="text-center text-[var(--accents-4)] py-8">Loading...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-[var(--border)] bg-white p-6 space-y-3">
+            <h3 class="text-lg font-semibold">Notes</h3>
+            <ul class="text-sm text-[var(--accents-4)] space-y-2 list-disc pl-5">
+              <li>The default behavior only prunes <code>expired</code> tokens. <code>cooling</code> tokens stay untouched unless you explicitly enable deletion.</li>
+              <li>Auto-replenishment is based on the total number of active tokens across the managed pools.</li>
+              <li>New register tasks are created via the console API and push successful tokens back into the current Grok2API instance.</li>
+            </ul>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div id="app-footer"></div>
+
+  <script src="/static/i18n/i18n.js"></script>
+  <script src="/static/common/js/admin-auth.js?v=1.6.2"></script>
+  <script src="/static/common/js/header.js?v=1.6.2"></script>
+  <script src="/static/common/js/footer.js?v=1.6.2"></script>
+  <script src="/static/common/js/toast.js"></script>
+  <script src="/static/admin/js/pool-maintenance.js?v=1.6.2"></script>
+</body>
+
+</html>

@@ -221,3 +221,39 @@ concurrent = 100
 batch_size = 50
 # Usage 请求超时时间（秒）
 timeout = 60
+
+# ==================== 号池维护 ====================
+[pool_maintenance]
+# 是否启用自动补号/删号
+enabled = false
+# register console API 地址
+console_url = "http://console:18600"
+# 轮询间隔（秒）
+interval_sec = 60
+# 受管号池列表
+managed_pools = ["ssoBasic"]
+# 最低活跃号阈值
+min_active_tokens = 30
+# 单个补号任务的注册数量
+register_count_per_task = 20
+# 最多同时运行的自动补号任务数
+max_running_tasks = 1
+# 自动创建任务名前缀
+task_name_prefix = "pool-maintenance"
+# 是否删除 cooling 号
+delete_cooling_tokens = false
+# 是否删除 expired 号
+delete_expired_tokens = true
+# 以下字段为空时，沿用 console 默认配置
+proxy = ""
+browser_proxy = ""
+temp_mail_api_base = ""
+temp_mail_admin_password = ""
+temp_mail_domain = ""
+temp_mail_site_password = ""
+# 注册任务回推当前 grok2api 的 sink 配置
+api_endpoint = "http://grok2api:8000/v1/admin/tokens"
+api_token = ""
+api_append = true
+# 注册成功并回推 token 后，是否自动触发 NSFW 开启
+api_auto_enable_nsfw = false

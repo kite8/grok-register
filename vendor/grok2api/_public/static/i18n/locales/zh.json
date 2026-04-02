@@ -71,6 +71,7 @@
   },
   "nav": {
     "tokenManage": "Token管理",
+    "poolMaintenance": "号池维护",
     "configManage": "配置管理",
     "cacheManage": "缓存管理",
     "chat": "Chat 聊天",

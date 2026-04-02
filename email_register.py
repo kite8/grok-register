@@ -53,6 +53,7 @@ TEMP_MAIL_PROVIDER = str(_conf.get("temp_mail_provider") or "").strip().lower()
 # ============================================================
 
 _temp_email_cache: Dict[str, str] = {}
+_last_verification_email_ref: Dict[str, str] = {}
 
 
 def get_email_and_token() -> Tuple[Optional[str], Optional[str]]:
@@ -79,6 +80,32 @@ def get_oai_code(dev_token: str, email: str, timeout: int = 30) -> Optional[str]
     if code:
         code = code.replace("-", "")
     return code
+
+
+def cleanup_last_verification_email(mail_token: Optional[str] = None) -> bool:
+    """
+    删除最近一次用于提取验证码的邮件。
+
+    mail_token 可选；若提供且与记录中的 token 不一致，则优先使用调用方传入值。
+    """
+    if not _last_verification_email_ref:
+        return False
+
+    token_to_use = str(mail_token or _last_verification_email_ref.get("mail_token") or "").strip()
+    msg_id = str(_last_verification_email_ref.get("message_id") or "").strip()
+    if not token_to_use or not msg_id:
+        _last_verification_email_ref.clear()
+        return False
+
+    try:
+        deleted = delete_email(token_to_use, msg_id)
+        if deleted:
+            print(f"[*] 已删除 {_provider_label()} 验证码邮件: {msg_id}")
+        else:
+            print(f"[Warn] 删除 {_provider_label()} 验证码邮件失败或未生效: {msg_id}")
+        return deleted
+    finally:
+        _last_verification_email_ref.clear()
 
 
 # ============================================================
@@ -620,6 +647,60 @@ def _fetch_cloudflaremail_email_detail(mail_token: str, msg_id: str) -> Optional
     return normalized
 
 
+def _delete_cloudflaremail_email(mail_token: str, msg_id: str) -> bool:
+    api_base = TEMP_MAIL_API_BASE.rstrip("/")
+    root_token, _mailbox = _decode_cloudflaremail_token(mail_token)
+    normalized_id = _normalize_message_id(msg_id)
+    headers = _build_headers(_build_cloudflaremail_headers(root_token))
+    session, use_cffi = _create_session()
+    try:
+        res = _do_request(
+            session,
+            use_cffi,
+            "delete",
+            f"{api_base}/api/email/{normalized_id}",
+            headers=headers,
+            timeout=20,
+        )
+        if res.status_code in {200, 204, 404}:
+            return True
+    except Exception:
+        return False
+    return False
+
+
+def _delete_generic_email(mail_token: str, msg_id: str) -> bool:
+    api_base = TEMP_MAIL_API_BASE.rstrip("/")
+    normalized_id = _normalize_message_id(msg_id)
+    headers = _build_headers({"Authorization": f"Bearer {mail_token}"})
+    session, use_cffi = _create_session()
+    try:
+        for path in (f"/api/mail/{normalized_id}", f"/api/email/{normalized_id}"):
+            res = _do_request(
+                session,
+                use_cffi,
+                "delete",
+                f"{api_base}{path}",
+                headers=headers,
+                timeout=20,
+            )
+            if res.status_code in {200, 204, 404}:
+                return True
+    except Exception:
+        return False
+    return False
+
+
+def delete_email(mail_token: str, msg_id: str) -> bool:
+    """删除单封邮件。"""
+    provider = _detect_mail_provider(TEMP_MAIL_API_BASE)
+    if provider == "cloudflaremail":
+        return _delete_cloudflaremail_email(mail_token, msg_id)
+    if provider == "duckmail":
+        return False
+    return _delete_generic_email(mail_token, msg_id)
+
+
 def fetch_email_detail(mail_token: str, msg_id: str) -> Optional[Dict[str, Any]]:
     """获取单封邮件详情。"""
     provider = _detect_mail_provider(TEMP_MAIL_API_BASE)
@@ -659,6 +740,7 @@ def wait_for_verification_code(mail_token: str, timeout: int = 120) -> Optional[
     """轮询临时邮箱，等待验证码邮件。"""
     start = time.time()
     seen_ids = set()
+    _last_verification_email_ref.clear()
 
     while time.time() - start < timeout:
         messages = fetch_emails(mail_token)
@@ -677,6 +759,13 @@ def wait_for_verification_code(mail_token: str, timeout: int = 120) -> Optional[
             content = _extract_mail_content(detail)
             code = extract_verification_code(content)
             if code:
+                _last_verification_email_ref.update(
+                    {
+                        "mail_token": str(mail_token or "").strip(),
+                        "message_id": str(msg_id).strip(),
+                        "provider": _detect_mail_provider(TEMP_MAIL_API_BASE),
+                    }
+                )
                 print(f"[*] 从 {_provider_label()} 提取到验证码: {code}")
                 return code
         time.sleep(3)

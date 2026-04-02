@@ -71,6 +71,7 @@
   },
   "nav": {
     "tokenManage": "Token Mgmt",
+    "poolMaintenance": "Pool Maintenance",
     "configManage": "Config Mgmt",
     "cacheManage": "Cache Mgmt",
     "chat": "Chat",
