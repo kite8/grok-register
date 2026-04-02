@@ -31,6 +31,7 @@ RUNTIME_DIR = APP_DIR / "runtime"
 TASKS_DIR = RUNTIME_DIR / "tasks"
 DB_PATH = RUNTIME_DIR / "console.db"
 TEMPLATES = Jinja2Templates(directory=str(APP_DIR / "templates"))
+STATIC_DIR = APP_DIR / "static"
 
 SOURCE_PROJECT = Path(os.getenv("GROK_REGISTER_SOURCE_DIR", str(REPO_ROOT))).resolve()
 SOURCE_VENV_PYTHON = Path(
@@ -67,6 +68,14 @@ def now_iso() -> str:
 def ensure_dirs() -> None:
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     TASKS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def static_asset_version(filename: str) -> str:
+    path = STATIC_DIR / filename
+    try:
+        return str(int(path.stat().st_mtime))
+    except OSError:
+        return str(int(time.time()))
 
 
 def get_conn() -> sqlite3.Connection:
@@ -148,6 +157,7 @@ def load_source_defaults() -> dict[str, Any]:
                 "run": {"count": 50},
                 "proxy": "",
                 "browser_proxy": "",
+                "temp_mail_provider": "",
                 "temp_mail_api_base": "",
                 "temp_mail_admin_password": "",
                 "temp_mail_domain": "",
@@ -165,6 +175,7 @@ def load_source_defaults() -> dict[str, Any]:
     env_map = {
         "proxy": "GROK_REGISTER_DEFAULT_PROXY",
         "browser_proxy": "GROK_REGISTER_DEFAULT_BROWSER_PROXY",
+        "temp_mail_provider": "GROK_REGISTER_DEFAULT_TEMP_MAIL_PROVIDER",
         "temp_mail_api_base": "GROK_REGISTER_DEFAULT_TEMP_MAIL_API_BASE",
         "temp_mail_admin_password": "GROK_REGISTER_DEFAULT_TEMP_MAIL_ADMIN_PASSWORD",
         "temp_mail_domain": "GROK_REGISTER_DEFAULT_TEMP_MAIL_DOMAIN",
@@ -429,6 +440,7 @@ class TaskCreate(BaseModel):
     count: int = Field(50, ge=1, le=5000)
     proxy: str | None = None
     browser_proxy: str | None = None
+    temp_mail_provider: str | None = None
     temp_mail_api_base: str | None = None
     temp_mail_admin_password: str | None = None
     temp_mail_domain: str | None = None
@@ -442,6 +454,7 @@ class TaskCreate(BaseModel):
 class SystemSettings(BaseModel):
     proxy: str = ""
     browser_proxy: str = ""
+    temp_mail_provider: str = ""
     temp_mail_api_base: str = ""
     temp_mail_admin_password: str = ""
     temp_mail_domain: str = ""
@@ -489,7 +502,13 @@ def merged_defaults() -> dict[str, Any]:
         base["proxy"] = str(saved.get("proxy", ""))
     if saved.get("browser_proxy") is not None:
         base["browser_proxy"] = str(saved.get("browser_proxy", ""))
-    for key in ("temp_mail_api_base", "temp_mail_admin_password", "temp_mail_domain", "temp_mail_site_password"):
+    for key in (
+        "temp_mail_provider",
+        "temp_mail_api_base",
+        "temp_mail_admin_password",
+        "temp_mail_domain",
+        "temp_mail_site_password",
+    ):
         if key in saved:
             base[key] = str(saved.get(key, ""))
     api_base = dict(base.get("api") or {})
@@ -510,6 +529,7 @@ def build_task_config(payload: TaskCreate) -> dict[str, Any]:
         "run": {"count": int(payload.count)},
         "proxy": defaults.get("proxy", "") if payload.proxy is None else payload.proxy.strip(),
         "browser_proxy": defaults.get("browser_proxy", "") if payload.browser_proxy is None else payload.browser_proxy.strip(),
+        "temp_mail_provider": defaults.get("temp_mail_provider", "") if payload.temp_mail_provider is None else payload.temp_mail_provider.strip(),
         "temp_mail_api_base": defaults.get("temp_mail_api_base", "") if payload.temp_mail_api_base is None else payload.temp_mail_api_base.strip(),
         "temp_mail_admin_password": defaults.get("temp_mail_admin_password", "") if payload.temp_mail_admin_password is None else payload.temp_mail_admin_password.strip(),
         "temp_mail_domain": defaults.get("temp_mail_domain", "") if payload.temp_mail_domain is None else payload.temp_mail_domain.strip(),
@@ -834,6 +854,10 @@ def index(request: Request) -> HTMLResponse:
             "defaults": json.dumps(merged_defaults(), ensure_ascii=False),
             "max_concurrent_tasks": MAX_CONCURRENT_TASKS,
             "source_project": str(SOURCE_PROJECT),
+            "static_versions": {
+                "app_css": static_asset_version("app.css"),
+                "app_js": static_asset_version("app.js"),
+            },
         },
     )
 
