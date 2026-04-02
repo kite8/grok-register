@@ -247,6 +247,7 @@ def run_health_checks() -> dict[str, Any]:
     request_proxy = str(defaults.get("proxy", "") or "").strip()
     api_conf = dict(defaults.get("api") or {})
     api_endpoint = str(api_conf.get("endpoint", "") or "").strip()
+    api_token = str(api_conf.get("token", "") or "").strip()
     temp_mail_api_base = str(defaults.get("temp_mail_api_base", "") or "").strip()
 
     warp_target = browser_proxy or request_proxy
@@ -311,7 +312,14 @@ def run_health_checks() -> dict[str, Any]:
         )
     else:
         try:
-            response = _request_with_optional_proxy(api_endpoint, timeout=15)
+            headers = None
+            if api_token:
+                headers = {"Authorization": f"Bearer {api_token}"}
+            response = _request_with_optional_proxy(
+                api_endpoint,
+                timeout=15,
+                headers=headers,
+            )
             ok = response.status_code in {200, 401, 403, 405}
             items.append(
                 _build_health_item(
@@ -319,7 +327,7 @@ def run_health_checks() -> dict[str, Any]:
                     "grok2api Sink",
                     ok,
                     f"HTTP {response.status_code}",
-                    "接口已可达。即使返回 401/403，也说明服务本身在线，只是需要正确的管理口令。",
+                    "接口已可达。若仍返回 401/403，通常说明当前配置里的管理口令不正确。",
                     api_endpoint,
                 )
             )
