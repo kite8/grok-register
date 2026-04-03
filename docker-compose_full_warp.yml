@@ -1,17 +1,13 @@
 services:
   warp:
-    image: ghcr.io/ccbkkb/microwarp:latest
-    container_name: warp
+    image: caomingjun/warp:latest
     restart: unless-stopped
+    environment:
+      WARP_SLEEP: 2
     cap_add:
       - NET_ADMIN
-      - SYS_MODULE
     ports:
       - "127.0.0.1:1080:1080"
-    sysctls:
-      - net.ipv4.conf.all.src_valid_mark=1
-    volumes:
-      - warp-data:/etc/wireguard
 
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:latest
@@ -70,6 +66,3 @@ services:
     depends_on:
       - grok2api
       - warp
-
-volumes:
-  warp-data:
