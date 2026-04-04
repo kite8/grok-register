@@ -230,6 +230,9 @@ async function fetchFunctionState(stateName) {
   const res = await fetch(`${FUNCTION_STATE_ENDPOINT_BASE}${encodeURIComponent(stateName)}`, {
     headers: buildAuthHeaders(authHeader)
   });
+  if (res.status === 404 || res.status === 405 || res.status === 501) {
+    return { mode: 'browser', snapshot: null, unsupported: true };
+  }
   if (!res.ok) {
     throw new Error(`HTTP ${res.status}`);
   }
@@ -249,6 +252,9 @@ async function saveFunctionState(stateName, snapshot) {
     },
     body: JSON.stringify(snapshot || {})
   });
+  if (res.status === 404 || res.status === 405 || res.status === 501) {
+    return { status: 'ignored', mode: 'browser', unsupported: true };
+  }
   if (!res.ok) {
     throw new Error(`HTTP ${res.status}`);
   }
