@@ -201,6 +201,12 @@ class LocalStorage(BaseStorage):
     def __init__(self):
         self._lock = asyncio.Lock()
 
+    def _safe_lock_name(self, name: str) -> str:
+        return "".join(
+            ch if ch.isalnum() or ch in ("-", "_") else "_"
+            for ch in str(name or "default")
+        ).strip("_") or "default"
+
     def _function_state_path(self, namespace: str) -> Path:
         safe = "".join(
             ch if ch.isalnum() or ch in ("-", "_") else "_"
@@ -220,7 +226,7 @@ class LocalStorage(BaseStorage):
                 raise StorageError(f"无法获取锁 '{name}'")
             return
 
-        lock_path = LOCK_DIR / f"{name}.lock"
+        lock_path = LOCK_DIR / f"{self._safe_lock_name(name)}.lock"
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         fd = None
         locked = False

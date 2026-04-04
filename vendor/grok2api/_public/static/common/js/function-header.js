@@ -9,8 +9,10 @@ async function loadFunctionHeader() {
     if (logoutBtn) {
       logoutBtn.classList.add('hidden');
       try {
-        const verify = await fetch('/v1/function/verify', { method: 'GET' });
-        if (verify.status === 401) {
+        const storedKey = typeof getStoredFunctionKey === 'function'
+          ? await getStoredFunctionKey()
+          : '';
+        if (storedKey) {
           logoutBtn.classList.remove('hidden');
         }
       } catch (e) {

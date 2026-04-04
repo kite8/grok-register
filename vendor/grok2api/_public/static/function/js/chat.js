@@ -1427,7 +1427,14 @@
     const fallback = ['grok-4.1-fast', 'grok-4', 'grok-3', 'grok-3-mini', 'grok-3-thinking', 'grok-4.20-beta', 'grok-imagine-1.0-fast'];
     const preferred = 'grok-4.20-beta';
     try {
-      const res = await fetch('/v1/models', { cache: 'no-store' });
+      let headers = {};
+      try {
+        const authHeader = await ensureFunctionKey();
+        headers = buildAuthHeaders(authHeader);
+      } catch (e) {
+        headers = {};
+      }
+      const res = await fetch('/v1/function/models', { cache: 'no-store', headers });
       if (!res.ok) throw new Error('models fetch failed');
       const data = await res.json();
       const items = Array.isArray(data && data.data) ? data.data : [];
