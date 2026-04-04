@@ -222,6 +222,13 @@ function functionLogout() {
   window.location.href = '/login';
 }
 
+function handleFunctionUnauthorized() {
+  clearStoredFunctionKey();
+  if (typeof window !== 'undefined' && window.location && window.location.pathname !== '/login') {
+    window.location.href = '/login';
+  }
+}
+
 async function fetchFunctionState(stateName) {
   const authHeader = await ensureFunctionKey();
   if (authHeader === null) {
@@ -230,6 +237,10 @@ async function fetchFunctionState(stateName) {
   const res = await fetch(`${FUNCTION_STATE_ENDPOINT_BASE}${encodeURIComponent(stateName)}`, {
     headers: buildAuthHeaders(authHeader)
   });
+  if (res.status === 401 || res.status === 403) {
+    handleFunctionUnauthorized();
+    return { mode: 'browser', snapshot: null, unauthorized: true };
+  }
   if (res.status === 404 || res.status === 405 || res.status === 501) {
     return { mode: 'browser', snapshot: null, unsupported: true };
   }
@@ -252,6 +263,10 @@ async function saveFunctionState(stateName, snapshot) {
     },
     body: JSON.stringify(snapshot || {})
   });
+  if (res.status === 401 || res.status === 403) {
+    handleFunctionUnauthorized();
+    return { status: 'ignored', mode: 'browser', unauthorized: true };
+  }
   if (res.status === 404 || res.status === 405 || res.status === 501) {
     return { status: 'ignored', mode: 'browser', unsupported: true };
   }
