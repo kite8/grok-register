@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Grok2API - Pool Maintenance</title>
+  <title data-i18n="poolMaintenance.pageTitle">Grok2API - 号池维护</title>
   <link rel="icon" href="/favicon.ico">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/geist@1.0.0/dist/fonts/geist-sans/style.css" rel="stylesheet">
@@ -21,41 +21,41 @@
     <div class="space-y-6">
       <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 class="text-2xl font-semibold tracking-tight">Pool Maintenance</h2>
-          <p class="text-[var(--accents-4)] mt-1 text-sm">
-            Maintain the token pool from the admin backend: replenish active tokens, prune expired ones, and reuse console defaults.
+          <h2 class="text-2xl font-semibold tracking-tight" data-i18n="poolMaintenance.title">号池维护</h2>
+          <p class="text-[var(--accents-4)] mt-1 text-sm" data-i18n="poolMaintenance.subtitle">
+            在管理后台维护 Token 号池：补足可用 Token、清理失效 Token，并复用注册控制台默认配置。
           </p>
         </div>
         <div class="flex flex-wrap items-center gap-3">
-          <button id="refresh-btn" type="button" class="geist-button-outline" onclick="loadStatusOnly()">Refresh</button>
-          <button id="run-btn" type="button" class="geist-button-outline" onclick="runNow()">Run Now</button>
-          <button id="save-btn" type="button" class="geist-button" onclick="saveSettings()">Save Config</button>
+          <button id="refresh-btn" type="button" class="geist-button-outline" onclick="loadStatusOnly()" data-i18n="poolMaintenance.refresh">刷新</button>
+          <button id="run-btn" type="button" class="geist-button-outline" onclick="runNow()" data-i18n="poolMaintenance.runNow">立即执行</button>
+          <button id="save-btn" type="button" class="geist-button" onclick="saveSettings()" data-i18n="poolMaintenance.saveConfig">保存配置</button>
         </div>
       </div>
 
       <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
         <div class="rounded-2xl border border-[var(--border)] bg-white p-5">
-          <div class="text-xs text-[var(--accents-4)]">Scheduler</div>
+          <div class="text-xs text-[var(--accents-4)]" data-i18n="poolMaintenance.scheduler">调度器</div>
           <div id="stat-enabled" class="mt-2 text-2xl font-semibold">-</div>
-          <div id="stat-last-run" class="mt-2 text-xs text-[var(--accents-4)]">Last run: -</div>
+          <div id="stat-last-run" class="mt-2 text-xs text-[var(--accents-4)]">-</div>
         </div>
         <div class="rounded-2xl border border-[var(--border)] bg-white p-5">
-          <div class="text-xs text-[var(--accents-4)]">Active Tokens</div>
+          <div class="text-xs text-[var(--accents-4)]" data-i18n="poolMaintenance.activeTokens">可用 Token</div>
           <div id="stat-active" class="mt-2 text-2xl font-semibold">-</div>
-          <div id="stat-total" class="mt-2 text-xs text-[var(--accents-4)]">Total tokens: -</div>
+          <div id="stat-total" class="mt-2 text-xs text-[var(--accents-4)]">-</div>
         </div>
         <div class="rounded-2xl border border-[var(--border)] bg-white p-5">
-          <div class="text-xs text-[var(--accents-4)]">Removable Tokens</div>
+          <div class="text-xs text-[var(--accents-4)]" data-i18n="poolMaintenance.removableTokens">可清理 Token</div>
           <div id="stat-removable" class="mt-2 text-2xl font-semibold">-</div>
-          <div id="stat-removable-detail" class="mt-2 text-xs text-[var(--accents-4)]">Cooling stays disabled by default.</div>
+          <div id="stat-removable-detail" class="mt-2 text-xs text-[var(--accents-4)]" data-i18n="poolMaintenance.coolingDefaultHint">默认不会删除 cooling Token。</div>
         </div>
         <div class="rounded-2xl border border-[var(--border)] bg-white p-5">
-          <div class="text-xs text-[var(--accents-4)]">Managed Tasks</div>
+          <div class="text-xs text-[var(--accents-4)]" data-i18n="poolMaintenance.managedTasks">受管任务</div>
           <div id="stat-running-tasks" class="mt-2 text-2xl font-semibold">-</div>
-          <div id="stat-console" class="mt-2 text-xs text-[var(--accents-4)]">Console: -</div>
+          <div id="stat-console" class="mt-2 text-xs text-[var(--accents-4)]">-</div>
         </div>
         <div class="rounded-2xl border border-[var(--border)] bg-white p-5">
-          <div class="text-xs text-[var(--accents-4)]">Last Result</div>
+          <div class="text-xs text-[var(--accents-4)]" data-i18n="poolMaintenance.lastResult">最近结果</div>
           <div id="stat-last-result" class="mt-2 text-2xl font-semibold">-</div>
           <div id="stat-last-error" class="mt-2 text-xs text-[var(--accents-4)] break-all">-</div>
         </div>
@@ -64,100 +64,100 @@
       <div class="grid grid-cols-1 gap-6 xl:grid-cols-[1.35fr_1fr]">
         <section class="rounded-2xl border border-[var(--border)] bg-white p-6 space-y-6">
           <div>
-            <h3 class="text-lg font-semibold">Maintenance Config</h3>
-            <p class="text-sm text-[var(--accents-4)] mt-1">Blank overrides fall back to the current register-console defaults.</p>
+            <h3 class="text-lg font-semibold" data-i18n="poolMaintenance.maintenanceConfig">维护配置</h3>
+            <p class="text-sm text-[var(--accents-4)] mt-1" data-i18n="poolMaintenance.blankOverridesHint">覆盖项留空时，会回退到当前 register-console 默认配置。</p>
           </div>
 
           <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
             <label class="space-y-2">
-              <span class="text-sm font-medium">Enable Scheduler</span>
+              <span class="text-sm font-medium" data-i18n="poolMaintenance.enableScheduler">启用调度器</span>
               <input id="enabled" type="checkbox" class="h-4 w-4">
             </label>
             <label class="space-y-2">
-              <span class="text-sm font-medium">Console URL</span>
+              <span class="text-sm font-medium" data-i18n="poolMaintenance.consoleUrl">控制台地址</span>
               <input id="console_url" class="geist-input" placeholder="http://console:18600" data-default-placeholder="http://console:18600">
             </label>
             <label class="space-y-2">
-              <span class="text-sm font-medium">Check Interval (sec)</span>
+              <span class="text-sm font-medium" data-i18n="poolMaintenance.checkInterval">检查间隔（秒）</span>
               <input id="interval_sec" class="geist-input" type="number" min="5">
             </label>
             <label class="space-y-2">
-              <span class="text-sm font-medium">Managed Pools</span>
+              <span class="text-sm font-medium" data-i18n="poolMaintenance.managedPools">受管号池</span>
               <input id="managed_pools" class="geist-input" placeholder="ssoBasic">
             </label>
             <label class="space-y-2">
-              <span class="text-sm font-medium">Min Active Tokens</span>
+              <span class="text-sm font-medium" data-i18n="poolMaintenance.minActiveTokens">最少可用 Token</span>
               <input id="min_active_tokens" class="geist-input" type="number" min="1">
             </label>
             <label class="space-y-2">
-              <span class="text-sm font-medium">Register Count Per Task</span>
+              <span class="text-sm font-medium" data-i18n="poolMaintenance.registerCountPerTask">单任务注册数量</span>
               <input id="register_count_per_task" class="geist-input" type="number" min="1">
             </label>
             <label class="space-y-2">
-              <span class="text-sm font-medium">Max Running Tasks</span>
+              <span class="text-sm font-medium" data-i18n="poolMaintenance.maxRunningTasks">最大运行任务数</span>
               <input id="max_running_tasks" class="geist-input" type="number" min="1">
             </label>
             <label class="space-y-2">
-              <span class="text-sm font-medium">Task Name Prefix</span>
+              <span class="text-sm font-medium" data-i18n="poolMaintenance.taskNamePrefix">任务名前缀</span>
               <input id="task_name_prefix" class="geist-input" placeholder="pool-maintenance">
             </label>
           </div>
 
           <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
             <label class="space-y-2">
-              <span class="text-sm font-medium">Delete Cooling Tokens</span>
+              <span class="text-sm font-medium" data-i18n="poolMaintenance.deleteCoolingTokens">删除 Cooling Token</span>
               <input id="delete_cooling_tokens" type="checkbox" class="h-4 w-4">
             </label>
             <label class="space-y-2">
-              <span class="text-sm font-medium">Delete Expired Tokens</span>
+              <span class="text-sm font-medium" data-i18n="poolMaintenance.deleteExpiredTokens">删除 Expired Token</span>
               <input id="delete_expired_tokens" type="checkbox" class="h-4 w-4">
             </label>
           </div>
 
           <div class="space-y-4">
             <div>
-              <h4 class="text-sm font-semibold">Register Task Overrides</h4>
-              <p class="text-xs text-[var(--accents-4)] mt-1">Only fill fields that should override the console defaults.</p>
+              <h4 class="text-sm font-semibold" data-i18n="poolMaintenance.registerTaskOverrides">注册任务覆盖项</h4>
+              <p class="text-xs text-[var(--accents-4)] mt-1" data-i18n="poolMaintenance.overridesHint">只填写需要覆盖控制台默认值的字段。</p>
             </div>
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
               <label class="space-y-2">
-                <span class="text-sm font-medium">Request Proxy</span>
-                <input id="proxy" class="geist-input" placeholder="Leave blank to follow console defaults" data-default-placeholder="Leave blank to follow console defaults">
+                <span class="text-sm font-medium" data-i18n="poolMaintenance.requestProxy">请求代理</span>
+                <input id="proxy" class="geist-input" placeholder="留空则跟随控制台默认值" data-default-placeholder="留空则跟随控制台默认值" data-i18n-placeholder="poolMaintenance.followConsoleDefaults">
               </label>
               <label class="space-y-2">
-                <span class="text-sm font-medium">Browser Proxy</span>
-                <input id="browser_proxy" class="geist-input" placeholder="Leave blank to follow console defaults" data-default-placeholder="Leave blank to follow console defaults">
+                <span class="text-sm font-medium" data-i18n="poolMaintenance.browserProxy">浏览器代理</span>
+                <input id="browser_proxy" class="geist-input" placeholder="留空则跟随控制台默认值" data-default-placeholder="留空则跟随控制台默认值" data-i18n-placeholder="poolMaintenance.followConsoleDefaults">
               </label>
               <label class="space-y-2 md:col-span-2">
-                <span class="text-sm font-medium">Temp Mail API Base</span>
-                <input id="temp_mail_api_base" class="geist-input" placeholder="Leave blank to follow console defaults" data-default-placeholder="Leave blank to follow console defaults">
+                <span class="text-sm font-medium" data-i18n="poolMaintenance.tempMailApiBase">临时邮箱 API Base</span>
+                <input id="temp_mail_api_base" class="geist-input" placeholder="留空则跟随控制台默认值" data-default-placeholder="留空则跟随控制台默认值" data-i18n-placeholder="poolMaintenance.followConsoleDefaults">
               </label>
               <label class="space-y-2 md:col-span-2">
-                <span class="text-sm font-medium">Temp Mail Admin Password</span>
-                <input id="temp_mail_admin_password" class="geist-input" placeholder="Leave blank to follow console defaults" data-default-placeholder="Leave blank to follow console defaults">
+                <span class="text-sm font-medium" data-i18n="poolMaintenance.tempMailAdminPassword">临时邮箱管理口令</span>
+                <input id="temp_mail_admin_password" class="geist-input" placeholder="留空则跟随控制台默认值" data-default-placeholder="留空则跟随控制台默认值" data-i18n-placeholder="poolMaintenance.followConsoleDefaults">
               </label>
               <label class="space-y-2">
-                <span class="text-sm font-medium">Temp Mail Domain</span>
-                <input id="temp_mail_domain" class="geist-input" placeholder="Leave blank to follow console defaults" data-default-placeholder="Leave blank to follow console defaults">
+                <span class="text-sm font-medium" data-i18n="poolMaintenance.tempMailDomain">临时邮箱域名</span>
+                <input id="temp_mail_domain" class="geist-input" placeholder="留空则跟随控制台默认值" data-default-placeholder="留空则跟随控制台默认值" data-i18n-placeholder="poolMaintenance.followConsoleDefaults">
               </label>
               <label class="space-y-2">
-                <span class="text-sm font-medium">Temp Mail Site Password</span>
-                <input id="temp_mail_site_password" class="geist-input" placeholder="Leave blank to follow console defaults" data-default-placeholder="Leave blank to follow console defaults">
+                <span class="text-sm font-medium" data-i18n="poolMaintenance.tempMailSitePassword">临时邮箱站点口令</span>
+                <input id="temp_mail_site_password" class="geist-input" placeholder="留空则跟随控制台默认值" data-default-placeholder="留空则跟随控制台默认值" data-i18n-placeholder="poolMaintenance.followConsoleDefaults">
               </label>
               <label class="space-y-2 md:col-span-2">
-                <span class="text-sm font-medium">Pushback API Endpoint</span>
-                <input id="api_endpoint" class="geist-input" placeholder="Leave blank to follow console defaults" data-default-placeholder="Leave blank to follow console defaults">
+                <span class="text-sm font-medium" data-i18n="poolMaintenance.pushbackApiEndpoint">回推 API Endpoint</span>
+                <input id="api_endpoint" class="geist-input" placeholder="留空则跟随控制台默认值" data-default-placeholder="留空则跟随控制台默认值" data-i18n-placeholder="poolMaintenance.followConsoleDefaults">
               </label>
               <label class="space-y-2 md:col-span-2">
-                <span class="text-sm font-medium">Pushback API Token</span>
-                <input id="api_token" class="geist-input" placeholder="Leave blank to follow console defaults" data-default-placeholder="Leave blank to follow console defaults">
+                <span class="text-sm font-medium" data-i18n="poolMaintenance.pushbackApiToken">回推 API Token</span>
+                <input id="api_token" class="geist-input" placeholder="留空则跟随控制台默认值" data-default-placeholder="留空则跟随控制台默认值" data-i18n-placeholder="poolMaintenance.followConsoleDefaults">
               </label>
               <label class="space-y-2">
-                <span class="text-sm font-medium">Append Existing Pool on Pushback</span>
+                <span class="text-sm font-medium" data-i18n="poolMaintenance.appendExistingPool">回推时追加已有号池</span>
                 <input id="api_append" type="checkbox" class="h-4 w-4">
               </label>
               <label class="space-y-2">
-                <span class="text-sm font-medium">Auto Enable NSFW</span>
+                <span class="text-sm font-medium" data-i18n="poolMaintenance.autoEnableNsfw">自动启用 NSFW</span>
                 <input id="api_auto_enable_nsfw" type="checkbox" class="h-4 w-4">
               </label>
             </div>
@@ -167,58 +167,58 @@
         <section class="space-y-6">
           <div class="rounded-2xl border border-[var(--border)] bg-white p-6 space-y-4">
             <div>
-              <h3 class="text-lg font-semibold">Run Summary</h3>
-              <p class="text-sm text-[var(--accents-4)] mt-1">Shows the latest scheduler result and the current managed token-pool snapshot.</p>
+              <h3 class="text-lg font-semibold" data-i18n="poolMaintenance.runSummary">运行摘要</h3>
+              <p class="text-sm text-[var(--accents-4)] mt-1" data-i18n="poolMaintenance.runSummaryHint">展示最近一次调度结果，以及当前受管号池快照。</p>
             </div>
-            <pre id="last-result-box" class="rounded-xl bg-[var(--accents-1)] p-4 text-xs overflow-auto whitespace-pre-wrap min-h-[180px]">Loading...</pre>
+            <pre id="last-result-box" class="rounded-xl bg-[var(--accents-1)] p-4 text-xs overflow-auto whitespace-pre-wrap min-h-[180px]" data-i18n="common.loading">加载中...</pre>
           </div>
 
           <div class="rounded-2xl border border-[var(--border)] bg-white p-6 space-y-4">
             <div>
-              <h3 class="text-lg font-semibold">Console Defaults</h3>
-              <p class="text-sm text-[var(--accents-4)] mt-1">Read from the current register console. Blank overrides continue to follow these values.</p>
+              <h3 class="text-lg font-semibold" data-i18n="poolMaintenance.consoleDefaults">控制台默认配置</h3>
+              <p class="text-sm text-[var(--accents-4)] mt-1" data-i18n="poolMaintenance.consoleDefaultsHint">从当前 register console 读取；覆盖项留空时持续跟随这里的值。</p>
             </div>
-            <div id="console-defaults-meta" class="text-xs text-[var(--accents-4)]">Loading...</div>
-            <pre id="console-defaults-box" class="rounded-xl bg-[var(--accents-1)] p-4 text-xs overflow-auto whitespace-pre-wrap min-h-[180px]">Loading...</pre>
+            <div id="console-defaults-meta" class="text-xs text-[var(--accents-4)]" data-i18n="common.loading">加载中...</div>
+            <pre id="console-defaults-box" class="rounded-xl bg-[var(--accents-1)] p-4 text-xs overflow-auto whitespace-pre-wrap min-h-[180px]" data-i18n="common.loading">加载中...</pre>
           </div>
 
           <div class="rounded-2xl border border-[var(--border)] bg-white p-6 space-y-4">
             <div>
-              <h3 class="text-lg font-semibold">Effective Register Config</h3>
-              <p class="text-sm text-[var(--accents-4)] mt-1">The config actually used when auto-created replenish tasks run.</p>
+              <h3 class="text-lg font-semibold" data-i18n="poolMaintenance.effectiveConfig">实际注册配置</h3>
+              <p class="text-sm text-[var(--accents-4)] mt-1" data-i18n="poolMaintenance.effectiveConfigHint">自动创建补号任务时真正使用的配置。</p>
             </div>
-            <pre id="effective-config-box" class="rounded-xl bg-[var(--accents-1)] p-4 text-xs overflow-auto whitespace-pre-wrap min-h-[180px]">Loading...</pre>
+            <pre id="effective-config-box" class="rounded-xl bg-[var(--accents-1)] p-4 text-xs overflow-auto whitespace-pre-wrap min-h-[180px]" data-i18n="common.loading">加载中...</pre>
           </div>
 
           <div class="rounded-2xl border border-[var(--border)] bg-white p-6 space-y-4">
             <div>
-              <h3 class="text-lg font-semibold">Recent Managed Tasks</h3>
-              <p class="text-sm text-[var(--accents-4)] mt-1">Only register tasks created by this maintenance worker are listed here.</p>
+              <h3 class="text-lg font-semibold" data-i18n="poolMaintenance.recentManagedTasks">最近受管任务</h3>
+              <p class="text-sm text-[var(--accents-4)] mt-1" data-i18n="poolMaintenance.recentManagedTasksHint">这里只展示由该维护器创建的注册任务。</p>
             </div>
             <div class="overflow-x-auto">
               <table class="geist-table min-w-full">
                 <thead>
                   <tr>
-                    <th class="text-left">ID</th>
-                    <th class="text-left">Name</th>
-                    <th>Status</th>
-                    <th>Progress</th>
-                    <th class="text-left">Created At</th>
+                    <th class="text-left" data-i18n="poolMaintenance.tableId">ID</th>
+                    <th class="text-left" data-i18n="poolMaintenance.tableName">名称</th>
+                    <th data-i18n="poolMaintenance.tableStatus">状态</th>
+                    <th data-i18n="poolMaintenance.tableProgress">进度</th>
+                    <th class="text-left" data-i18n="poolMaintenance.tableCreatedAt">创建时间</th>
                   </tr>
                 </thead>
                 <tbody id="task-table-body">
-                  <tr><td colspan="5" class="text-center text-[var(--accents-4)] py-8">Loading...</td></tr>
+                  <tr><td colspan="5" class="text-center text-[var(--accents-4)] py-8" data-i18n="common.loading">加载中...</td></tr>
                 </tbody>
               </table>
             </div>
           </div>
 
           <div class="rounded-2xl border border-[var(--border)] bg-white p-6 space-y-3">
-            <h3 class="text-lg font-semibold">Notes</h3>
+            <h3 class="text-lg font-semibold" data-i18n="poolMaintenance.notes">说明</h3>
             <ul class="text-sm text-[var(--accents-4)] space-y-2 list-disc pl-5">
-              <li>The default behavior only prunes <code>expired</code> tokens. <code>cooling</code> tokens stay untouched unless you explicitly enable deletion.</li>
-              <li>Auto-replenishment is based on the total number of active tokens across the managed pools.</li>
-              <li>New register tasks are created via the console API and push successful tokens back into the current Grok2API instance.</li>
+              <li data-i18n="poolMaintenance.note1">默认只会清理 `expired` Token；`cooling` Token 只有在显式开启后才会删除。</li>
+              <li data-i18n="poolMaintenance.note2">自动补号基于受管号池的可用 Token 总量判断是否触发。</li>
+              <li data-i18n="poolMaintenance.note3">新注册任务通过控制台 API 创建，成功后会把 Token 回推到当前 Grok2API 实例。</li>
             </ul>
           </div>
         </section>

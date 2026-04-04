@@ -36,6 +36,7 @@ DATA_DIR = Path(os.getenv("DATA_DIR", str(DEFAULT_DATA_DIR))).expanduser()
 # 配置文件路径
 CONFIG_FILE = DATA_DIR / "config.toml"
 TOKEN_FILE = DATA_DIR / "token.json"
+FUNCTION_CHAT_SESSION_DIR = DATA_DIR / "function_chat_sessions"
 LOCK_DIR = DATA_DIR / ".locks"
 
 
@@ -99,6 +100,18 @@ class BaseStorage(abc.ABC):
     @abc.abstractmethod
     async def save_tokens(self, data: Dict[str, Any]):
         """保存所有 Token"""
+        pass
+
+    @abc.abstractmethod
+    async def load_function_chat_sessions(
+        self, namespace: str
+    ) -> Optional[Dict[str, Any]]:
+        """加载功能聊天会话"""
+        pass
+
+    @abc.abstractmethod
+    async def save_function_chat_sessions(self, namespace: str, data: Dict[str, Any]):
+        """保存功能聊天会话"""
         pass
 
     async def save_tokens_delta(
@@ -187,6 +200,13 @@ class LocalStorage(BaseStorage):
 
     def __init__(self):
         self._lock = asyncio.Lock()
+
+    def _function_chat_session_path(self, namespace: str) -> Path:
+        safe = "".join(
+            ch if ch.isalnum() or ch in ("-", "_") else "_"
+            for ch in str(namespace or "default")
+        ).strip("_")
+        return FUNCTION_CHAT_SESSION_DIR / f"{safe or 'default'}.json"
 
     @asynccontextmanager
     async def acquire_lock(self, name: str, timeout: int = 10):
@@ -310,6 +330,32 @@ class LocalStorage(BaseStorage):
             logger.error(f"LocalStorage: 保存 Token 失败: {e}")
             raise StorageError(f"保存 Token 失败: {e}")
 
+    async def load_function_chat_sessions(
+        self, namespace: str
+    ) -> Optional[Dict[str, Any]]:
+        file_path = self._function_chat_session_path(namespace)
+        if not file_path.exists():
+            return None
+        try:
+            async with aiofiles.open(file_path, "rb") as f:
+                content = await f.read()
+                return json_loads(content)
+        except Exception as e:
+            logger.error(f"LocalStorage: 加载功能聊天会话失败: {e}")
+            return None
+
+    async def save_function_chat_sessions(self, namespace: str, data: Dict[str, Any]):
+        file_path = self._function_chat_session_path(namespace)
+        try:
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            temp_path = file_path.with_suffix(".tmp")
+            async with aiofiles.open(temp_path, "wb") as f:
+                await f.write(orjson.dumps(data, option=orjson.OPT_INDENT_2))
+            os.replace(temp_path, file_path)
+        except Exception as e:
+            logger.error(f"LocalStorage: 保存功能聊天会话失败: {e}")
+            raise StorageError(f"保存功能聊天会话失败: {e}")
+
     async def close(self):
         pass
 
@@ -337,6 +383,7 @@ class RedisStorage(BaseStorage):
         self.key_pools = "grok2api:pools"  # Set: pool_names
         self.prefix_pool_set = "grok2api:pool:"  # Set: pool -> token_ids
         self.prefix_token_hash = "grok2api:token:"  # Hash: token_id -> token_data
+        self.prefix_function_chat = "grok2api:function_chat_sessions:"
         self.lock_prefix = "grok2api:lock:"
 
     @asynccontextmanager
@@ -570,6 +617,28 @@ class RedisStorage(BaseStorage):
             logger.error(f"RedisStorage: 保存 Token 失败: {e}")
             raise
 
+    async def load_function_chat_sessions(
+        self, namespace: str
+    ) -> Optional[Dict[str, Any]]:
+        try:
+            raw = await self.redis.get(f"{self.prefix_function_chat}{namespace}")
+            if not raw:
+                return None
+            return json_loads(raw)
+        except Exception as e:
+            logger.error(f"RedisStorage: 加载功能聊天会话失败: {e}")
+            return None
+
+    async def save_function_chat_sessions(self, namespace: str, data: Dict[str, Any]):
+        try:
+            await self.redis.set(
+                f"{self.prefix_function_chat}{namespace}",
+                json_dumps(data),
+            )
+        except Exception as e:
+            logger.error(f"RedisStorage: 保存功能聊天会话失败: {e}")
+            raise
+
     async def close(self):
         try:
             await self.redis.close()
@@ -650,6 +719,17 @@ class SQLStorage(BaseStorage):
                         key_name VARCHAR(64) NOT NULL,
                         value TEXT,
                         PRIMARY KEY (section, key_name)
+                    )
+                """)
+                )
+
+                # 功能聊天会话表
+                await conn.execute(
+                    text("""
+                    CREATE TABLE IF NOT EXISTS function_chat_sessions (
+                        namespace VARCHAR(128) PRIMARY KEY,
+                        data TEXT NOT NULL,
+                        updated_at BIGINT
                     )
                 """)
                 )
@@ -990,6 +1070,69 @@ class SQLStorage(BaseStorage):
                 await session.commit()
         except Exception as e:
             logger.error(f"SQLStorage: 保存配置失败: {e}")
+            raise
+
+    async def load_function_chat_sessions(
+        self, namespace: str
+    ) -> Optional[Dict[str, Any]]:
+        await self._ensure_schema()
+        from sqlalchemy import text
+
+        try:
+            async with self.async_session() as session:
+                res = await session.execute(
+                    text(
+                        "SELECT data FROM function_chat_sessions WHERE namespace = :namespace"
+                    ),
+                    {"namespace": namespace},
+                )
+                row = res.first()
+                if not row or not row[0]:
+                    return None
+                raw = row[0]
+                return json_loads(raw) if isinstance(raw, str) else raw
+        except Exception as e:
+            logger.error(f"SQLStorage: 加载功能聊天会话失败: {e}")
+            return None
+
+    async def save_function_chat_sessions(self, namespace: str, data: Dict[str, Any]):
+        await self._ensure_schema()
+        from sqlalchemy import text
+
+        payload = json_dumps(data)
+        updated_at = int(time.time() * 1000)
+
+        try:
+            async with self.async_session() as session:
+                if self.dialect in ("mysql", "mariadb"):
+                    stmt = text(
+                        "INSERT INTO function_chat_sessions (namespace, data, updated_at) "
+                        "VALUES (:namespace, :data, :updated_at) "
+                        "ON DUPLICATE KEY UPDATE data = VALUES(data), updated_at = VALUES(updated_at)"
+                    )
+                elif self.dialect in ("postgres", "postgresql", "pgsql"):
+                    stmt = text(
+                        "INSERT INTO function_chat_sessions (namespace, data, updated_at) "
+                        "VALUES (:namespace, :data, :updated_at) "
+                        "ON CONFLICT (namespace) DO UPDATE SET "
+                        "data = EXCLUDED.data, updated_at = EXCLUDED.updated_at"
+                    )
+                else:
+                    stmt = text(
+                        "INSERT INTO function_chat_sessions (namespace, data, updated_at) "
+                        "VALUES (:namespace, :data, :updated_at)"
+                    )
+                await session.execute(
+                    stmt,
+                    {
+                        "namespace": namespace,
+                        "data": payload,
+                        "updated_at": updated_at,
+                    },
+                )
+                await session.commit()
+        except Exception as e:
+            logger.error(f"SQLStorage: 保存功能聊天会话失败: {e}")
             raise
 
     async def load_tokens(self) -> Dict[str, Any]:

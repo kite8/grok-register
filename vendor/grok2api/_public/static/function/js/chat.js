@@ -32,6 +32,9 @@
   const STORAGE_KEY = 'grok2api_chat_sessions';
   const SIDEBAR_STATE_KEY = 'grok2api_chat_sidebar_collapsed';
   const MAX_CONTEXT_MESSAGES = 5;
+  const SESSION_STORAGE_ENDPOINT = '/v1/function/chat/sessions';
+  const SESSION_STORAGE_BROWSER = 'browser';
+  const SESSION_STORAGE_SERVER = 'server';
 
   let messageHistory = [];
   let isSending = false;
@@ -43,6 +46,10 @@
   const DEFAULT_SESSION_TITLES = ['新会话', 'New Session'];
 
   let sessionsData = null;
+  let sessionStorageMode = SESSION_STORAGE_BROWSER;
+  let pendingServerSnapshot = null;
+  let serverSaveTimer = null;
+  let serverSaveInFlight = null;
 
   function generateId() {
     return crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -52,33 +59,124 @@
     return DEFAULT_SESSION_TITLES.includes(title);
   }
 
-  function loadSessions() {
+  function createInitialSessionsData() {
+    const id = generateId();
+    return {
+      activeId: id,
+      sessions: [{
+        id,
+        title: t('chat.newSession'),
+        isDefaultTitle: true,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        messages: []
+      }]
+    };
+  }
+
+  function normalizeSessionsData(data) {
+    if (!data || !Array.isArray(data.sessions)) return null;
+    return data;
+  }
+
+  function loadSessionsFromBrowser() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        sessionsData = JSON.parse(raw);
-        if (!sessionsData || !Array.isArray(sessionsData.sessions)) {
-          sessionsData = null;
-        }
+        return normalizeSessionsData(JSON.parse(raw));
       }
     } catch (e) {
-      sessionsData = null;
+      return null;
     }
+    return null;
+  }
+
+  async function buildFunctionAuthHeaders() {
+    try {
+      const authHeader = await ensureFunctionKey();
+      return buildAuthHeaders(authHeader);
+    } catch (e) {
+      return {};
+    }
+  }
+
+  async function fetchServerSessions() {
+    const headers = await buildFunctionAuthHeaders();
+    const res = await fetch(SESSION_STORAGE_ENDPOINT, { headers });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async function pushServerSessions(snapshot) {
+    const headers = await buildFunctionAuthHeaders();
+    const res = await fetch(SESSION_STORAGE_ENDPOINT, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...headers
+      },
+      body: JSON.stringify(snapshot)
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+  }
+
+  async function flushServerSessions() {
+    if (sessionStorageMode !== SESSION_STORAGE_SERVER) return;
+    if (serverSaveInFlight || !pendingServerSnapshot) return;
+    const snapshot = pendingServerSnapshot;
+    pendingServerSnapshot = null;
+    serverSaveInFlight = (async () => {
+      try {
+        await pushServerSessions(snapshot);
+      } catch (e) {
+        toast(t('chat.serverSaveFailed'), 'error');
+      } finally {
+        serverSaveInFlight = null;
+        if (pendingServerSnapshot) {
+          flushServerSessions();
+        }
+      }
+    })();
+    return serverSaveInFlight;
+  }
+
+  function scheduleServerSave(snapshot) {
+    pendingServerSnapshot = snapshot;
+    if (serverSaveTimer) {
+      clearTimeout(serverSaveTimer);
+    }
+    serverSaveTimer = window.setTimeout(() => {
+      serverSaveTimer = null;
+      flushServerSessions();
+    }, 250);
+  }
+
+  async function loadSessions() {
+    try {
+      const response = await fetchServerSessions();
+      sessionStorageMode = response && response.mode === SESSION_STORAGE_SERVER
+        ? SESSION_STORAGE_SERVER
+        : SESSION_STORAGE_BROWSER;
+      if (sessionStorageMode === SESSION_STORAGE_SERVER) {
+        sessionsData = normalizeSessionsData(response.snapshot);
+      } else {
+        sessionsData = loadSessionsFromBrowser();
+      }
+    } catch (e) {
+      sessionStorageMode = SESSION_STORAGE_BROWSER;
+      sessionsData = loadSessionsFromBrowser();
+      toast(t('chat.serverLoadFailed'), 'error');
+    }
+
     if (!sessionsData || !sessionsData.sessions.length) {
-      const id = generateId();
-      sessionsData = {
-        activeId: id,
-        sessions: [{
-          id,
-          title: t('chat.newSession'),
-          isDefaultTitle: true,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          messages: []
-        }]
-      };
+      sessionsData = createInitialSessionsData();
       saveSessions();
     }
+
     sessionsData.sessions.forEach((session) => {
       if (session && typeof session.isDefaultTitle === 'undefined') {
         session.isDefaultTitle = isDefaultTitleValue(session.title);
@@ -144,6 +242,10 @@
     if (!sessionsData) return;
     const snapshot = serializeSessions();
     if (!snapshot) return;
+    if (sessionStorageMode === SESSION_STORAGE_SERVER) {
+      scheduleServerSave(snapshot);
+      return;
+    }
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
     } catch (e) {
@@ -1831,6 +1933,6 @@
       window.location.href = '/login';
       return;
     }
-    loadSessions();
+    await loadSessions();
   })();
 })();

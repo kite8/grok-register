@@ -9,7 +9,16 @@ const SECRET_FIELDS = new Set([
 ]);
 
 const byId = (id) => document.getElementById(id);
-const DEFAULT_FALLBACK_PLACEHOLDER = "Leave blank to follow console defaults";
+
+function tSafe(key, fallback, params) {
+  if (typeof t === "function") {
+    const translated = t(key, params);
+    if (translated && translated !== key) {
+      return translated;
+    }
+  }
+  return fallback;
+}
 
 function markFormDirty() {
   if (!initialConfigLoaded) return;
@@ -49,7 +58,9 @@ function formatTimestamp(value) {
 }
 
 function summarizeLastResult(result) {
-  if (!result) return "No execution record.";
+  if (!result) {
+    return tSafe("poolMaintenance.noExecutionRecord", "暂无执行记录。");
+  }
   return JSON.stringify(result, null, 2);
 }
 
@@ -69,9 +80,13 @@ function sanitizeConfigForDisplay(data) {
   return sanitized;
 }
 
+function defaultPlaceholderText() {
+  return tSafe("poolMaintenance.followConsoleDefaults", "留空则跟随控制台默认值");
+}
+
 function resetDynamicPlaceholders() {
   document.querySelectorAll("[data-default-placeholder]").forEach((el) => {
-    el.placeholder = el.dataset.defaultPlaceholder || "";
+    el.placeholder = el.dataset.defaultPlaceholder || defaultPlaceholderText();
   });
 }
 
@@ -101,7 +116,7 @@ function setConsoleFallbackPlaceholders(consoleDefaults) {
     if (!el || el.type === "checkbox") return;
     if ((el.value || "").trim()) return;
     if (defaults[id]) {
-      el.placeholder = DEFAULT_FALLBACK_PLACEHOLDER;
+      el.placeholder = defaultPlaceholderText();
     }
   });
 }
@@ -111,7 +126,7 @@ function renderTasks(tasks) {
   if (!tbody) return;
 
   if (!tasks || tasks.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-[var(--accents-4)] py-8">No auto-created tasks yet.</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center text-[var(--accents-4)] py-8">${tSafe("poolMaintenance.noAutoTasks", "暂时还没有自动创建的任务。")}</td></tr>`;
     return;
   }
 
@@ -136,22 +151,31 @@ function renderRuntime(data) {
   const removablePreview = runtime.removable_tokens || [];
   const lastResult = data.last_result || null;
 
-  byId("stat-enabled").textContent = data.config?.enabled ? "Enabled" : "Disabled";
-  byId("stat-last-run").textContent = `Last run: ${formatTimestamp(data.last_run_finished_at)}`;
+  byId("stat-enabled").textContent = data.config?.enabled
+    ? tSafe("poolMaintenance.enabled", "启用")
+    : tSafe("poolMaintenance.disabled", "停用");
+  byId("stat-last-run").textContent = tSafe("poolMaintenance.lastRun", "上次执行：{time}", {
+    time: formatTimestamp(data.last_run_finished_at),
+  });
   byId("stat-active").textContent = String(summary.active_total ?? 0);
-  byId("stat-total").textContent = `Total tokens: ${summary.total_tokens ?? 0}`;
+  byId("stat-total").textContent = tSafe("poolMaintenance.totalTokens", "Token 总数：{count}", {
+    count: String(summary.total_tokens ?? 0),
+  });
   byId("stat-removable").textContent = String(summary.removable_total ?? 0);
   byId("stat-removable-detail").textContent = removablePreview.length
     ? removablePreview.slice(0, 3).map((item) => `${item.status}:${item.token_preview}`).join(" | ")
-    : "No removable tokens";
+    : tSafe("poolMaintenance.noRemovableTokens", "暂无可清理 Token");
   byId("stat-running-tasks").textContent = String(runtime.running_task_count ?? 0);
   byId("stat-console").textContent = runtime.console_error
-    ? `Console error: ${runtime.console_error}`
-    : "Console healthy";
+    ? tSafe("poolMaintenance.consoleError", "控制台异常：{msg}", { msg: runtime.console_error })
+    : tSafe("poolMaintenance.consoleHealthy", "控制台正常");
   byId("stat-last-result").textContent = lastResult
-    ? `del ${lastResult.removed_count || 0} / add ${lastResult.created_task_count || 0}`
+    ? tSafe("poolMaintenance.lastResultSummary", "删 {removed} / 补 {created}", {
+      removed: String(lastResult.removed_count || 0),
+      created: String(lastResult.created_task_count || 0),
+    })
     : "-";
-  byId("stat-last-error").textContent = data.last_error || "No recent error";
+  byId("stat-last-error").textContent = data.last_error || tSafe("poolMaintenance.noRecentError", "最近没有错误");
   byId("last-result-box").textContent = summarizeLastResult({
     last_result: lastResult,
     pools,
@@ -172,24 +196,26 @@ function renderConsoleDefaults(data) {
 
   if (metaEl) {
     if (consoleError) {
-      metaEl.textContent = `Failed to load console defaults: ${consoleError}`;
+      metaEl.textContent = tSafe("poolMaintenance.failedLoadConsoleDefaults", "加载控制台默认值失败：{msg}", {
+        msg: consoleError,
+      });
     } else if (consoleDefaults) {
-      metaEl.textContent = "Console defaults loaded successfully.";
+      metaEl.textContent = tSafe("poolMaintenance.consoleDefaultsLoaded", "已成功加载控制台默认值。");
     } else {
-      metaEl.textContent = "Console defaults are unavailable.";
+      metaEl.textContent = tSafe("poolMaintenance.consoleDefaultsUnavailable", "控制台默认值暂不可用。");
     }
   }
 
   if (defaultsBox) {
     defaultsBox.textContent = consoleDefaults
       ? JSON.stringify(sanitizeConfigForDisplay(consoleDefaults), null, 2)
-      : (consoleError || "No default config");
+      : (consoleError || tSafe("poolMaintenance.noDefaultConfig", "暂无默认配置"));
   }
 
   if (effectiveBox) {
     effectiveBox.textContent = effectiveConfig
       ? JSON.stringify(sanitizeConfigForDisplay(effectiveConfig), null, 2)
-      : "No effective config";
+      : tSafe("poolMaintenance.noEffectiveConfig", "暂无实际配置");
   }
 
   setConsoleFallbackPlaceholders(consoleDefaults || {});
@@ -274,7 +300,7 @@ async function loadPage(options = {}) {
     renderRuntime(data);
     renderConsoleDefaults(data);
   } catch (err) {
-    showToast(`Failed to load pool maintenance: ${err.message}`, "error");
+    showToast(tSafe("poolMaintenance.loadFailed", "加载号池维护信息失败：{msg}", { msg: err.message }), "error");
   }
 }
 
@@ -294,12 +320,12 @@ async function saveSettings() {
       },
       body: JSON.stringify(collectPayload()),
     });
-    showToast("Pool maintenance config saved", "success");
+    showToast(tSafe("poolMaintenance.saveSuccess", "号池维护配置已保存"), "success");
     formDirty = false;
     initialConfigLoaded = false;
     await loadPage({ forceConfig: true });
   } catch (err) {
-    showToast(`Save failed: ${err.message}`, "error");
+    showToast(tSafe("poolMaintenance.saveFailed", "保存失败：{msg}", { msg: err.message }), "error");
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -314,10 +340,13 @@ async function runNow() {
       headers: buildAuthHeaders(apiKey),
     });
     const result = data.result || {};
-    showToast(`Run completed: removed ${result.removed_count || 0}, created ${result.created_task_count || 0} tasks`, "success");
+    showToast(tSafe("poolMaintenance.runSuccess", "执行完成：删除 {removed} 个，创建 {created} 个任务", {
+      removed: String(result.removed_count || 0),
+      created: String(result.created_task_count || 0),
+    }), "success");
     await loadPage();
   } catch (err) {
-    showToast(`Run failed: ${err.message}`, "error");
+    showToast(tSafe("poolMaintenance.runFailed", "执行失败：{msg}", { msg: err.message }), "error");
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -327,6 +356,7 @@ async function init() {
   apiKey = await ensureAdminKey();
   if (apiKey === null) return;
   bindFormDirtyTracking();
+  resetDynamicPlaceholders();
   await loadPage({ forceConfig: true });
   window.setInterval(() => {
     if (!document.hidden) {
