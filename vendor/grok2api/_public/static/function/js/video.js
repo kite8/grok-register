@@ -38,11 +38,83 @@
   let previewCount = 0;
   const DEFAULT_REASONING_EFFORT = 'low';
   const MAX_REFERENCE_IMAGES = 7;
+  const FUNCTION_STATE_NAME = 'video';
+  const FUNCTION_STATE_SERVER = 'server';
+  const VIDEO_STATE_MAX_ITEMS = 12;
+  let functionStateMode = 'browser';
+  let pendingFunctionStateSnapshot = null;
+  let functionStateSaveTimer = null;
+  let functionStateSaveInFlight = null;
+  let restoringFunctionState = false;
 
   function toast(message, type) {
     if (typeof showToast === 'function') {
       showToast(message, type);
     }
+  }
+
+  function serializeVideoItems() {
+    return Array.from(document.querySelectorAll('.video-item'))
+      .slice(-VIDEO_STATE_MAX_ITEMS)
+      .map((item, index) => {
+        const url = item.dataset.url || '';
+        if (!url) return null;
+        const title = item.querySelector('.video-item-title');
+        return {
+          index: item.dataset.index || String(index + 1),
+          title: title ? title.textContent : '',
+          url
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function buildVideoStateSnapshot() {
+    return {
+      version: 1,
+      settings: {
+        prompt: promptInput ? promptInput.value : '',
+        imageUrlText: imageUrlInput ? imageUrlInput.value : '',
+        ratio: ratioSelect ? ratioSelect.value : '3:2',
+        length: lengthSelect ? lengthSelect.value : '6',
+        resolution: resolutionSelect ? resolutionSelect.value : '480p',
+        preset: presetSelect ? presetSelect.value : 'normal'
+      },
+      previews: serializeVideoItems()
+    };
+  }
+
+  async function flushFunctionState() {
+    if (functionStateMode !== FUNCTION_STATE_SERVER) return;
+    if (functionStateSaveInFlight || !pendingFunctionStateSnapshot) return;
+    const snapshot = pendingFunctionStateSnapshot;
+    pendingFunctionStateSnapshot = null;
+    functionStateSaveInFlight = (async () => {
+      try {
+        await saveFunctionState(FUNCTION_STATE_NAME, snapshot);
+      } catch (e) {
+        toast(t('common.serverStateSaveFailed'), 'error');
+      } finally {
+        functionStateSaveInFlight = null;
+        if (pendingFunctionStateSnapshot) {
+          flushFunctionState();
+        }
+      }
+    })();
+    return functionStateSaveInFlight;
+  }
+
+  function scheduleFunctionStateSave() {
+    if (functionStateMode !== FUNCTION_STATE_SERVER) return;
+    if (restoringFunctionState) return;
+    pendingFunctionStateSnapshot = buildVideoStateSnapshot();
+    if (functionStateSaveTimer) {
+      clearTimeout(functionStateSaveTimer);
+    }
+    functionStateSaveTimer = window.setTimeout(() => {
+      functionStateSaveTimer = null;
+      flushFunctionState();
+    }, 300);
   }
 
   function setStatus(state, text) {
@@ -113,6 +185,7 @@
     if (durationValue) {
       durationValue.textContent = t('video.elapsedTimeNone');
     }
+    scheduleFunctionStateSave();
   }
 
   function initPreviewSlot() {
@@ -200,6 +273,113 @@
     }
     if (safeUrl) {
       item.classList.remove('is-pending');
+    }
+    scheduleFunctionStateSave();
+  }
+
+  function appendRestoredVideoItem(record) {
+    if (!videoStage || !record || !record.url) return;
+    previewCount += 1;
+    const item = document.createElement('div');
+    item.className = 'video-item';
+    item.dataset.index = String(record.index || previewCount);
+    item.dataset.url = record.url;
+
+    const header = document.createElement('div');
+    header.className = 'video-item-bar';
+
+    const title = document.createElement('div');
+    title.className = 'video-item-title';
+    title.textContent = record.title || t('video.videoTitle', { n: item.dataset.index });
+
+    const actions = document.createElement('div');
+    actions.className = 'video-item-actions';
+
+    const openBtn = document.createElement('a');
+    openBtn.className = 'geist-button-outline text-xs px-3 video-open';
+    openBtn.target = '_blank';
+    openBtn.rel = 'noopener';
+    openBtn.textContent = t('video.open');
+    openBtn.href = record.url;
+
+    const downloadBtn = document.createElement('button');
+    downloadBtn.className = 'geist-button-outline text-xs px-3 video-download';
+    downloadBtn.type = 'button';
+    downloadBtn.textContent = t('imagine.download');
+    downloadBtn.dataset.url = record.url;
+    downloadBtn.disabled = false;
+
+    actions.appendChild(openBtn);
+    actions.appendChild(downloadBtn);
+    header.appendChild(title);
+    header.appendChild(actions);
+
+    const body = document.createElement('div');
+    body.className = 'video-item-body';
+    body.innerHTML = `\n      <video controls preload="metadata">\n        <source src="${record.url}" type="video/mp4">\n      </video>\n    `;
+
+    const link = document.createElement('div');
+    link.className = 'video-item-link has-url';
+    link.textContent = record.url;
+
+    item.appendChild(header);
+    item.appendChild(body);
+    item.appendChild(link);
+
+    videoStage.appendChild(item);
+    videoStage.classList.remove('hidden');
+    if (videoEmpty) {
+      videoEmpty.classList.add('hidden');
+    }
+  }
+
+  function applyVideoStateSnapshot(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') return;
+    restoringFunctionState = true;
+    try {
+      const settings = snapshot.settings || {};
+      if (promptInput && typeof settings.prompt === 'string') {
+        promptInput.value = settings.prompt;
+      }
+      if (imageUrlInput && typeof settings.imageUrlText === 'string') {
+        imageUrlInput.value = settings.imageUrlText;
+      }
+      if (ratioSelect && typeof settings.ratio === 'string') {
+        ratioSelect.value = settings.ratio;
+      }
+      if (lengthSelect && typeof settings.length === 'string') {
+        lengthSelect.value = settings.length;
+      }
+      if (resolutionSelect && typeof settings.resolution === 'string') {
+        resolutionSelect.value = settings.resolution;
+      }
+      if (presetSelect && typeof settings.preset === 'string') {
+        presetSelect.value = settings.preset;
+      }
+
+      clearFileSelection();
+      updateReferenceSummary(parseReferenceUrls(imageUrlInput ? imageUrlInput.value : '').map((url, index) => `${index + 1}. ${url}`));
+      updateMeta();
+      resetOutput();
+      (snapshot.previews || []).forEach((item) => appendRestoredVideoItem(item));
+      currentPreviewItem = null;
+    } finally {
+      restoringFunctionState = false;
+    }
+  }
+
+  async function loadFunctionStateSnapshot() {
+    try {
+      const response = await fetchFunctionState(FUNCTION_STATE_NAME);
+      functionStateMode = response && response.mode === FUNCTION_STATE_SERVER
+        ? FUNCTION_STATE_SERVER
+        : 'browser';
+      if (functionStateMode === FUNCTION_STATE_SERVER && response && response.snapshot) {
+        applyVideoStateSnapshot(response.snapshot);
+      }
+    } catch (e) {
+      functionStateMode = 'browser';
+      toast(t('common.serverStateLoadFailed'), 'error');
     }
   }
 
@@ -657,6 +837,7 @@
       }))).then(items => {
         fileDataUrls = items.map(item => item.data);
         updateReferenceSummary(items.map((item, index) => `${index + 1}. ${item.name}`));
+        scheduleFunctionStateSave();
       }).catch(() => {
         fileDataUrls = [];
         toast(t('common.fileReadFailed'), 'error');
@@ -674,6 +855,7 @@
   if (clearImageFileBtn) {
     clearImageFileBtn.addEventListener('click', () => {
       clearFileSelection();
+      scheduleFunctionStateSave();
     });
   }
 
@@ -691,6 +873,7 @@
       } else if (!fileDataUrls.length) {
         updateReferenceSummary([]);
       }
+      scheduleFunctionStateSave();
     });
   }
 
@@ -701,7 +884,22 @@
         startConnection();
       }
     });
+    promptInput.addEventListener('input', () => scheduleFunctionStateSave());
+  }
+
+  if (ratioSelect) {
+    ratioSelect.addEventListener('change', () => scheduleFunctionStateSave());
+  }
+  if (lengthSelect) {
+    lengthSelect.addEventListener('change', () => scheduleFunctionStateSave());
+  }
+  if (resolutionSelect) {
+    resolutionSelect.addEventListener('change', () => scheduleFunctionStateSave());
+  }
+  if (presetSelect) {
+    presetSelect.addEventListener('change', () => scheduleFunctionStateSave());
   }
 
   updateMeta();
+  loadFunctionStateSnapshot();
 })();

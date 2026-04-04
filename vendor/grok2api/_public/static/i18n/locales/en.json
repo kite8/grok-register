@@ -67,7 +67,9 @@
     "noTokenSelected": "No Token selected",
     "clearCache": "Clear cache",
     "failureDetails": "Failure Details",
-    "retryFailed": "Retry failed items"
+    "retryFailed": "Retry failed items",
+    "serverStateLoadFailed": "Failed to load server-side state, falling back to current browser state",
+    "serverStateSaveFailed": "Failed to save server-side state"
   },
   "nav": {
     "tokenManage": "Token Mgmt",
@@ -135,7 +137,7 @@
         "app_key": {"title": "Admin Password", "desc": "Password for logging into the Grok2API admin panel (required)."},
         "function_enabled": {"title": "Enable Function Access", "desc": "Whether to enable the function access entry (disabled means function pages are inaccessible)."},
         "function_key": {"title": "Function Password", "desc": "Access password for function pages (optional)."},
-        "function_chat_storage": {"title": "Function Chat Storage", "desc": "browser keeps sessions in the browser; server persists them in the current server storage backend."},
+        "function_state_storage": {"title": "Function State Storage", "desc": "browser keeps function state in the browser; server persists it in the current server storage backend."},
         "app_url": {"title": "App URL", "desc": "External access URL for the Grok2API service, used for file link access."},
         "image_format": {"title": "Image Format", "desc": "Default image format (url or base64)."},
         "video_format": {"title": "Video Format", "desc": "Default video format (html or url, url is the processed link)."},
@@ -410,8 +412,6 @@
     "fileLabel": "[File]",
     "compositeContent": "[Composite]",
     "storageFull": "Local storage is full, some sessions were not saved",
-    "serverLoadFailed": "Failed to load server-side sessions, falling back to browser storage",
-    "serverSaveFailed": "Failed to save server-side sessions",
     "attachmentNoEdit": "Attachment messages cannot be edited yet",
     "saveEdit": "Save",
     "saveEditTitle": "Save edit",

@@ -33,6 +33,9 @@
   let connectionMode = 'ws';
   let modePreference = 'auto';
   const MODE_STORAGE_KEY = 'imagine_mode';
+  const FUNCTION_STATE_NAME = 'imagine';
+  const FUNCTION_STATE_SERVER = 'server';
+  const IMAGINE_STATE_MAX_ITEMS = 12;
   let pendingFallbackTimer = null;
   let currentTaskIds = [];
   let directoryHandle = null;
@@ -42,11 +45,95 @@
   let streamSequence = 0;
   const streamImageMap = new Map();
   let finalMinBytesDefault = 100000;
+  let functionStateMode = 'browser';
+  let pendingFunctionStateSnapshot = null;
+  let functionStateSaveTimer = null;
+  let functionStateSaveInFlight = null;
+  let restoringFunctionState = false;
 
   function toast(message, type) {
     if (typeof showToast === 'function') {
       showToast(message, type);
     }
+  }
+
+  function serializeWaterfallItems() {
+    return Array.from(document.querySelectorAll('.waterfall-item'))
+      .slice(-IMAGINE_STATE_MAX_ITEMS)
+      .map((item, index) => {
+        const img = item.querySelector('img');
+        const left = item.querySelector('.waterfall-meta > div:first-child');
+        const status = item.querySelector('.image-status');
+        const elapsed = item.querySelector('.meta-right span:last-child');
+        const imageUrl = item.dataset.imageUrl || (img ? img.src : '');
+        if (!imageUrl) return null;
+        return {
+          imageUrl,
+          prompt: item.dataset.prompt || '',
+          sequence: left ? left.textContent : `#${index + 1}`,
+          statusText: status ? status.textContent : '',
+          statusClass: status && status.classList.contains('error')
+            ? 'error'
+            : (status && status.classList.contains('running') ? 'running' : 'done'),
+          elapsedText: elapsed ? elapsed.textContent : ''
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function buildImagineStateSnapshot() {
+    return {
+      version: 1,
+      settings: {
+        prompt: promptInput ? promptInput.value : '',
+        ratio: ratioSelect ? ratioSelect.value : '2:3',
+        concurrent: concurrentSelect ? concurrentSelect.value : '1',
+        autoScroll: !!(autoScrollToggle && autoScrollToggle.checked),
+        autoDownload: !!(autoDownloadToggle && autoDownloadToggle.checked),
+        reverseInsert: !!(reverseInsertToggle && reverseInsertToggle.checked),
+        autoFilter: !!(autoFilterToggle && autoFilterToggle.checked),
+        nsfw: nsfwSelect ? nsfwSelect.value : 'true',
+        modePreference
+      },
+      stats: {
+        count: imageCount,
+        latencyText: latencyValue ? latencyValue.textContent : '-'
+      },
+      items: serializeWaterfallItems()
+    };
+  }
+
+  async function flushFunctionState() {
+    if (functionStateMode !== FUNCTION_STATE_SERVER) return;
+    if (functionStateSaveInFlight || !pendingFunctionStateSnapshot) return;
+    const snapshot = pendingFunctionStateSnapshot;
+    pendingFunctionStateSnapshot = null;
+    functionStateSaveInFlight = (async () => {
+      try {
+        await saveFunctionState(FUNCTION_STATE_NAME, snapshot);
+      } catch (e) {
+        toast(t('common.serverStateSaveFailed'), 'error');
+      } finally {
+        functionStateSaveInFlight = null;
+        if (pendingFunctionStateSnapshot) {
+          flushFunctionState();
+        }
+      }
+    })();
+    return functionStateSaveInFlight;
+  }
+
+  function scheduleFunctionStateSave() {
+    if (functionStateMode !== FUNCTION_STATE_SERVER) return;
+    if (restoringFunctionState) return;
+    pendingFunctionStateSnapshot = buildImagineStateSnapshot();
+    if (functionStateSaveTimer) {
+      clearTimeout(functionStateSaveTimer);
+    }
+    functionStateSaveTimer = window.setTimeout(() => {
+      functionStateSaveTimer = null;
+      flushFunctionState();
+    }, 300);
   }
 
   function setStatus(state, text) {
@@ -105,6 +192,7 @@
       }
     }
     updateModeValue();
+    scheduleFunctionStateSave();
   }
 
   function updateModeValue() {}
@@ -305,6 +393,119 @@
     document.body.removeChild(link);
   }
 
+  function appendRestoredImage(record) {
+    if (!waterfall || !record || !record.imageUrl) return;
+    if (emptyState) {
+      emptyState.style.display = 'none';
+    }
+
+    const item = document.createElement('div');
+    item.className = 'waterfall-item';
+
+    const checkbox = document.createElement('div');
+    checkbox.className = 'image-checkbox';
+
+    const img = document.createElement('img');
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.alt = record.sequence || 'image';
+    img.src = record.imageUrl;
+
+    const metaBar = document.createElement('div');
+    metaBar.className = 'waterfall-meta';
+    const left = document.createElement('div');
+    left.textContent = record.sequence || '#';
+    const rightWrap = document.createElement('div');
+    rightWrap.className = 'meta-right';
+    const status = document.createElement('span');
+    status.className = `image-status ${record.statusClass || 'done'}`;
+    status.textContent = record.statusText || t('common.done');
+    const right = document.createElement('span');
+    right.textContent = record.elapsedText || '';
+
+    rightWrap.appendChild(status);
+    rightWrap.appendChild(right);
+    metaBar.appendChild(left);
+    metaBar.appendChild(rightWrap);
+
+    item.appendChild(checkbox);
+    item.appendChild(img);
+    item.appendChild(metaBar);
+
+    item.dataset.imageUrl = record.imageUrl;
+    item.dataset.prompt = record.prompt || 'image';
+    waterfall.appendChild(item);
+  }
+
+  function applyImagineStateSnapshot(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') return;
+    restoringFunctionState = true;
+    try {
+      const settings = snapshot.settings || {};
+      if (promptInput && typeof settings.prompt === 'string') {
+        promptInput.value = settings.prompt;
+      }
+      if (ratioSelect && typeof settings.ratio === 'string') {
+        ratioSelect.value = settings.ratio;
+      }
+      if (concurrentSelect && typeof settings.concurrent === 'string') {
+        concurrentSelect.value = settings.concurrent;
+      }
+      if (autoScrollToggle) {
+        autoScrollToggle.checked = settings.autoScroll !== false;
+      }
+      if (autoDownloadToggle && typeof settings.autoDownload === 'boolean') {
+        autoDownloadToggle.checked = settings.autoDownload;
+      }
+      if (reverseInsertToggle && typeof settings.reverseInsert === 'boolean') {
+        reverseInsertToggle.checked = settings.reverseInsert;
+      }
+      if (autoFilterToggle && typeof settings.autoFilter === 'boolean') {
+        autoFilterToggle.checked = settings.autoFilter;
+      }
+      if (nsfwSelect && typeof settings.nsfw === 'string') {
+        nsfwSelect.value = settings.nsfw;
+      }
+      if (typeof settings.modePreference === 'string') {
+        setModePreference(settings.modePreference, false);
+      }
+      if (selectFolderBtn) {
+        selectFolderBtn.disabled = !(autoDownloadToggle && autoDownloadToggle.checked && 'showDirectoryPicker' in window);
+      }
+
+      clearImages();
+      (snapshot.items || []).forEach((item) => appendRestoredImage(item));
+      imageCount = Array.isArray(snapshot.items) ? snapshot.items.length : 0;
+      streamSequence = imageCount;
+      updateCount(imageCount);
+      if (latencyValue) {
+        latencyValue.textContent = snapshot.stats && snapshot.stats.latencyText
+          ? snapshot.stats.latencyText
+          : '-';
+      }
+      if (emptyState) {
+        emptyState.style.display = imageCount > 0 ? 'none' : 'block';
+      }
+    } finally {
+      restoringFunctionState = false;
+    }
+  }
+
+  async function loadFunctionStateSnapshot() {
+    try {
+      const response = await fetchFunctionState(FUNCTION_STATE_NAME);
+      functionStateMode = response && response.mode === FUNCTION_STATE_SERVER
+        ? FUNCTION_STATE_SERVER
+        : 'browser';
+      if (functionStateMode === FUNCTION_STATE_SERVER && response && response.snapshot) {
+        applyImagineStateSnapshot(response.snapshot);
+      }
+    } catch (e) {
+      functionStateMode = 'browser';
+      toast(t('common.serverStateLoadFailed'), 'error');
+    }
+  }
+
   function appendImage(base64, meta) {
     if (!waterfall) return;
     if (autoFilterToggle && autoFilterToggle.checked) {
@@ -392,6 +593,8 @@
         downloadImage(base64, filename);
       }
     }
+
+    scheduleFunctionStateSave();
   }
 
   function upsertStreamImage(raw, meta, imageId, isFinal) {
@@ -416,6 +619,7 @@
             imageCount -= 1;
             updateCount(imageCount);
           }
+          scheduleFunctionStateSave();
         }
         return;
       }
@@ -526,6 +730,8 @@
         downloadImage(raw, filename);
       }
     }
+
+    scheduleFunctionStateSave();
   }
 
   function handleMessage(raw) {
@@ -840,6 +1046,7 @@
     if (emptyState) {
       emptyState.style.display = 'block';
     }
+    scheduleFunctionStateSave();
   }
 
   if (startBtn) {
@@ -863,12 +1070,16 @@
         startConnection();
       }
     });
+    promptInput.addEventListener('input', () => scheduleFunctionStateSave());
   }
 
-  loadFilterDefaults();
+  loadFilterDefaults().then(() => {
+    loadFunctionStateSnapshot();
+  });
 
   if (ratioSelect) {
     ratioSelect.addEventListener('change', () => {
+      scheduleFunctionStateSave();
       if (isRunning) {
         if (connectionMode === 'sse') {
           stopConnection().then(() => {
@@ -911,6 +1122,25 @@
         }
       });
     });
+  }
+
+  if (concurrentSelect) {
+    concurrentSelect.addEventListener('change', () => scheduleFunctionStateSave());
+  }
+  if (autoScrollToggle) {
+    autoScrollToggle.addEventListener('change', () => scheduleFunctionStateSave());
+  }
+  if (autoDownloadToggle) {
+    autoDownloadToggle.addEventListener('change', () => scheduleFunctionStateSave());
+  }
+  if (reverseInsertToggle) {
+    reverseInsertToggle.addEventListener('change', () => scheduleFunctionStateSave());
+  }
+  if (autoFilterToggle) {
+    autoFilterToggle.addEventListener('change', () => scheduleFunctionStateSave());
+  }
+  if (nsfwSelect) {
+    nsfwSelect.addEventListener('change', () => scheduleFunctionStateSave());
   }
 
   // File System API support check

@@ -51,6 +51,7 @@ def _migrate_deprecated_config(
         "grok.thinking": "app.thinking",
         "grok.dynamic_statsig": "app.dynamic_statsig",
         "grok.filter_tags": "app.filter_tags",
+        "app.function_chat_storage": "app.function_state_storage",
         "grok.timeout": "voice.timeout",
         "grok.base_proxy_url": "proxy.base_proxy_url",
         "grok.asset_proxy_url": "proxy.asset_proxy_url",

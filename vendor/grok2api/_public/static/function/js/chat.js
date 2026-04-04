@@ -32,9 +32,9 @@
   const STORAGE_KEY = 'grok2api_chat_sessions';
   const SIDEBAR_STATE_KEY = 'grok2api_chat_sidebar_collapsed';
   const MAX_CONTEXT_MESSAGES = 5;
-  const SESSION_STORAGE_ENDPOINT = '/v1/function/chat/sessions';
   const SESSION_STORAGE_BROWSER = 'browser';
   const SESSION_STORAGE_SERVER = 'server';
+  const FUNCTION_STATE_NAME = 'chat';
 
   let messageHistory = [];
   let isSending = false;
@@ -91,37 +91,12 @@
     return null;
   }
 
-  async function buildFunctionAuthHeaders() {
-    try {
-      const authHeader = await ensureFunctionKey();
-      return buildAuthHeaders(authHeader);
-    } catch (e) {
-      return {};
-    }
-  }
-
   async function fetchServerSessions() {
-    const headers = await buildFunctionAuthHeaders();
-    const res = await fetch(SESSION_STORAGE_ENDPOINT, { headers });
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-    return res.json();
+    return fetchFunctionState(FUNCTION_STATE_NAME);
   }
 
   async function pushServerSessions(snapshot) {
-    const headers = await buildFunctionAuthHeaders();
-    const res = await fetch(SESSION_STORAGE_ENDPOINT, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...headers
-      },
-      body: JSON.stringify(snapshot)
-    });
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
+    return saveFunctionState(FUNCTION_STATE_NAME, snapshot);
   }
 
   async function flushServerSessions() {
@@ -133,7 +108,7 @@
       try {
         await pushServerSessions(snapshot);
       } catch (e) {
-        toast(t('chat.serverSaveFailed'), 'error');
+        toast(t('common.serverStateSaveFailed'), 'error');
       } finally {
         serverSaveInFlight = null;
         if (pendingServerSnapshot) {
@@ -169,7 +144,7 @@
     } catch (e) {
       sessionStorageMode = SESSION_STORAGE_BROWSER;
       sessionsData = loadSessionsFromBrowser();
-      toast(t('chat.serverLoadFailed'), 'error');
+      toast(t('common.serverStateLoadFailed'), 'error');
     }
 
     if (!sessionsData || !sessionsData.sessions.length) {

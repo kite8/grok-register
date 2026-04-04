@@ -3,6 +3,7 @@ const FUNCTION_KEY_STORAGE = 'grok2api_function_key';
 const APP_KEY_ENC_PREFIX = 'enc:v1:';
 const APP_KEY_XOR_PREFIX = 'enc:xor:';
 const APP_KEY_SECRET = 'grok2api-admin-key';
+const FUNCTION_STATE_ENDPOINT_BASE = '/v1/function/state/';
 let cachedAdminKey = null;
 let cachedFunctionKey = null;
 
@@ -219,6 +220,39 @@ function logout() {
 function functionLogout() {
   clearStoredFunctionKey();
   window.location.href = '/login';
+}
+
+async function fetchFunctionState(stateName) {
+  const authHeader = await ensureFunctionKey();
+  if (authHeader === null) {
+    return { mode: 'browser', snapshot: null };
+  }
+  const res = await fetch(`${FUNCTION_STATE_ENDPOINT_BASE}${encodeURIComponent(stateName)}`, {
+    headers: buildAuthHeaders(authHeader)
+  });
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+async function saveFunctionState(stateName, snapshot) {
+  const authHeader = await ensureFunctionKey();
+  if (authHeader === null) {
+    throw new Error('Unauthorized');
+  }
+  const res = await fetch(`${FUNCTION_STATE_ENDPOINT_BASE}${encodeURIComponent(stateName)}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...buildAuthHeaders(authHeader)
+    },
+    body: JSON.stringify(snapshot || {})
+  });
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+  return res.json();
 }
 
 async function fetchStorageType() {

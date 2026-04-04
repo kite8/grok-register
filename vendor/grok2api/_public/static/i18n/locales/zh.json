@@ -67,7 +67,9 @@
     "noTokenSelected": "未选择 Token",
     "clearCache": "清空缓存",
     "failureDetails": "失败详情",
-    "retryFailed": "重试失败项"
+    "retryFailed": "重试失败项",
+    "serverStateLoadFailed": "服务端状态加载失败，已回退到当前浏览器状态",
+    "serverStateSaveFailed": "服务端状态保存失败"
   },
   "nav": {
     "tokenManage": "Token管理",
@@ -135,7 +137,7 @@
         "app_key": {"title": "后台密码", "desc": "登录 Grok2API 管理后台的密码（必填）。"},
         "function_enabled": {"title": "启用功能玩法", "desc": "是否启用功能玩法入口（关闭则功能玩法页面不可访问）。"},
         "function_key": {"title": "Function 密码", "desc": "功能玩法页面的访问密码（可选）。"},
-        "function_chat_storage": {"title": "功能聊天存储", "desc": "browser 保存在浏览器本地；server 保存在服务端当前存储后端。"},
+        "function_state_storage": {"title": "功能玩法状态存储", "desc": "browser 保存在浏览器本地；server 保存在服务端当前存储后端。"},
         "app_url": {"title": "应用地址", "desc": "当前 Grok2API 服务的外部访问 URL，用于文件链接访问。"},
         "image_format": {"title": "图片格式", "desc": "默认生成的图片格式（url 或 base64）。"},
         "video_format": {"title": "视频格式", "desc": "默认生成的视频格式（html 或 url，url 为处理后的链接）。"},
@@ -410,8 +412,6 @@
     "fileLabel": "[文件]",
     "compositeContent": "[复合内容]",
     "storageFull": "本地存储空间不足，部分会话未保存",
-    "serverLoadFailed": "服务端会话加载失败，已回退到浏览器本地存储",
-    "serverSaveFailed": "服务端会话保存失败",
     "attachmentNoEdit": "附件消息暂不支持编辑",
     "saveEdit": "保存",
     "saveEditTitle": "保存编辑",
